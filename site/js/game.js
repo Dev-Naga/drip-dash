@@ -12,6 +12,11 @@ const JUMP_V = 860, JUMP2_V = 760, FASTFALL_V = 1150;
 const HOLD_TIME = 0.22, COYOTE = 0.09, BUFFER = 0.13;
 const SLIDE_TIME = 0.6;
 const PX_PER_M = 10;
+// Moving text is fully readable up to LABEL_FULL px/s, fades out, and is gone by LABEL_GONE
+// (reached ~9 s and ~24 s into a run). Fast-scrolling text causes eye strain; by then
+// players recognise each obstacle by its shape and colour.
+const LABEL_FULL = 480, LABEL_GONE = 620;
+const REDUCED_MOTION = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 const ZONE_M = 1100;           // metres per zone
 const BRAND = { blue: '#005695', blue60: '#5D85B7', blue30: '#A4B7D7', black: '#040707', aqua: '#00C1D5', deep: '#003a66' };
 
@@ -205,6 +210,17 @@ export class Game {
   get score() { return Math.floor(this.distPx / PX_PER_M) + this.bonus; }
   get distance() { return Math.floor(this.distPx / PX_PER_M); }
   get multiplier() { return Math.min(5, 1 + Math.floor(this.combo / 5)); }
+  get labelAlpha() { return clamp((LABEL_GONE - this.speed) / (LABEL_GONE - LABEL_FULL), 0, 1); }
+
+  // Draw scrolling text only while the world is slow enough to read it comfortably.
+  movingText(text, x, y) {
+    const a = this.labelAlpha;
+    if (a <= 0.02) return;
+    const ctx = this.ctx;
+    ctx.save(); ctx.globalAlpha *= a;
+    ctx.fillText(text, this.snapX(x), this.snapY(y));
+    ctx.restore();
+  }
 
   start(seed) {
     this.reset(seed || (Math.random() * 2 ** 31) | 0);
@@ -578,7 +594,7 @@ export class Game {
     const ctx = this.ctx, s = this.scale * this.dpr;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     let shx = 0, shy = 0;
-    if (this.shake > 0) { shx = (Math.random() - 0.5) * 12 * this.shake; shy = (Math.random() - 0.5) * 12 * this.shake; }
+    if (this.shake > 0 && !REDUCED_MOTION) { shx = (Math.random() - 0.5) * 12 * this.shake; shy = (Math.random() - 0.5) * 12 * this.shake; }
     ctx.setTransform(s, 0, 0, s, shx * this.dpr, this.oy * this.dpr + shy * this.dpr);
 
     const zA = this.prevZone % ZONES.length, zB = this.zone % ZONES.length;
@@ -629,7 +645,7 @@ export class Game {
       ctx.globalAlpha = 1;
     }
     // flash
-    if (this.flash > 0) {
+    if (this.flash > 0 && !REDUCED_MOTION) {
       ctx.fillStyle = `rgba(255,255,255,${this.flash})`;
       ctx.fillRect(0, this.viewTop, this.W, this.viewBottom - this.viewTop);
     }
@@ -772,7 +788,7 @@ export class Game {
       ctx.fillStyle = '#16502b'; ctx.fillRect(x, G - o.h + 14, o.w, 3);
       ctx.fillStyle = '#121416'; roundRect(ctx, x - 4, G - o.h - 6, o.w + 8, 12, 4); ctx.fill();   // black lid
       ctx.fillStyle = '#d7e3ea'; ctx.font = '700 11px "Barlow Condensed", sans-serif'; ctx.textAlign = 'center';
-      ctx.fillText('VALVE', x + o.w / 2, G - o.h + 32);
+      this.movingText('VALVE', x + o.w / 2, G - o.h + 32);
     } else if (o.type === 'standpipe') {
       const g = ctx.createLinearGradient(x, 0, x + o.w, 0);
       g.addColorStop(0, BRAND.deep); g.addColorStop(0.35, BRAND.blue60); g.addColorStop(1, BRAND.blue);
@@ -802,7 +818,7 @@ export class Game {
         ctx.beginPath(); ctx.arc(px, top + 58 + ph * 30, 2.5, 0, Math.PI * 2); ctx.fill();
       }
       ctx.fillStyle = '#fff'; ctx.font = '700 13px "Barlow Condensed", sans-serif'; ctx.textAlign = 'center';
-      ctx.fillText('MAIN LINE', x + o.w / 2 + 40, top + 36);
+      this.movingText('MAIN LINE', x + o.w / 2 + 40, top + 36);
     } else if (o.type === 'geyser') {
       const on = this.geyserOn(o);
       // head
@@ -891,10 +907,19 @@ export class Game {
       roundRect(g, 0, 0, w, h, 6); g.fill(); g.stroke();
       const lw = w - 20, lh = lw * this.logo.naturalHeight / this.logo.naturalWidth;
       g.drawImage(this.logo, 10, 6, lw, lh);
-      g.fillStyle = BRAND.blue; g.font = 'italic 700 12px "Zilla Slab", Georgia, serif'; g.textAlign = 'center';
-      g.fillText('Creating Smart Water Solutions', w / 2, h - 8);
     });
     this.blit(face, x, y);
+    // tagline is small moving text: fade it with speed (the logo itself stays)
+    const a = this.labelAlpha;
+    if (a > 0.02) {
+      const tag = this.sprite(`tag${w}`, w, 16, 1, (g) => {
+        g.fillStyle = BRAND.blue; g.font = 'italic 700 12px "Zilla Slab", Georgia, serif'; g.textAlign = 'center';
+        g.fillText('Creating Smart Water Solutions', w / 2, 12);
+      });
+      const ctx2 = this.ctx; ctx2.save(); ctx2.globalAlpha *= a;
+      this.blit(tag, x, y + h - 20);
+      ctx2.restore();
+    }
   }
 
   groundBase(top, fill) {
@@ -972,7 +997,6 @@ export class Game {
             g.fillStyle = '#fff'; g.fillRect(16, 18, 88, 36);
             g.drawImage(this.logo, 18, 20, 84, 84 * this.logo.naturalHeight / this.logo.naturalWidth);
             g.fillStyle = '#1d2833'; g.fillRect(22, 90, 76, 30);
-            g.fillStyle = '#7d8790'; g.font = '600 10px "Barlow Condensed", sans-serif'; g.fillText('UL 508A', 28, 140);
           });
           this.blit(panel, x + 20, G - 200);
         }
@@ -983,7 +1007,9 @@ export class Game {
           ctx.beginPath(); ctx.arc(x + 52 + k * 28, G - 128, 7, 0, Math.PI * 2); ctx.fill();
         }
         ctx.fillStyle = '#3ddc84'; ctx.font = '600 13px "Barlow Condensed", monospace'; ctx.textAlign = 'left';
-        ctx.fillText(`${(60 + Math.sin(this.time + i) * 4).toFixed(1)} PSI`, x + 48, this.snapY(G - 90));
+        this.movingText(`${(60 + Math.sin(this.time + i) * 4).toFixed(1)} PSI`, x + 48, G - 90);
+        ctx.fillStyle = '#7d8790'; ctx.font = '600 10px "Barlow Condensed", sans-serif';
+        this.movingText('UL 508A', x + 48, G - 60);
       } else {
         // vertical pump + motor
         const px = x + 80;
