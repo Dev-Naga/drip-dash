@@ -41,7 +41,7 @@ Months follow **US Central time**. The leaderboard rolls over automatically at m
    ```sql
    select * from admin.monthly_standings where month = '2026-11' limit 20;
    ```
-   This shows name, company, **email**, best score and number of games for the top players.
+   This shows name, company, **email**, the month's **Valley Score** (best score on each level, added up), how many levels they completed, games played and a per-level breakdown.
 2. Review the top 5. Things to look out for:
    - a huge score from someone with only 1–2 games
    - several accounts from the same company with near-identical scores
@@ -95,7 +95,7 @@ The game pre-fills the registration form from these values. If a token is empty,
 
 ### b) Sync players back to HubSpot (monthly, about 5 minutes)
 1. Supabase → SQL Editor: `select * from admin.player_export;` → **Download CSV**.
-2. HubSpot → Contacts → **Import** → match on Email. Map `best_score` and `games_played` to custom contact properties (create "Drip Dash best score" and "Drip Dash games played" once). Use `marketing_opt_in` to decide on newsletter subscription.
+2. HubSpot → Contacts → **Import** → match on Email. Map `valley_score_all_time`, `levels_completed` and `games_played` to custom contact properties (create "Drip Dash valley score", "Drip Dash levels" and "Drip Dash games played" once). Use `marketing_opt_in` to decide on newsletter subscription.
 3. You can then build HubSpot lists like "played Drip Dash this month" for follow-ups.
 
 ### Later (optional)
@@ -117,11 +117,20 @@ A live sync (a Supabase Edge Function or a Zapier/Make zap calling HubSpot's con
 The game is a static website (the `site/` folder, no build step). Whichever host you use, deploying means publishing the `site/` folder. See the README for the host that was set up.
 
 To change art, text or difficulty, edit the files in `site/` and redeploy:
-- Difficulty and speed: constants near the top of `site/js/game.js` and the `speed` formula in `update()`.
+- Levels: each level is one file in `site/js/levels/` (timers, star thresholds, demand curves, dialogue, Field Note photo and caption).
 - Text and copy: `site/index.html`.
-- Brand colors: `:root` at the top of `site/css/style.css` and `BRAND` in `game.js`.
+- Brand colors: `:root` at the top of `site/css/style.css` and `C` in `site/js/engine.js`.
 
-If you change scoring rules in `game.js`, check the bounds in `submit_run` in `supabase/schema.sql`, which are commented. Otherwise good scores could be rejected.
+If you change a level's scoring or timing, update its `maxScore` / `minSeconds` **and** the matching row in `private.levels` (top of `supabase/schema.sql`). Otherwise good scores could be rejected.
+
+### Adding a new level (monthly or seasonal challenge)
+1. Copy an existing level file in `site/js/levels/` (for example `l4-storm.js`), give it a new `id` (for example `S1`) and change the mechanics, text and photo.
+2. Add it to the list in `site/js/levels/index.js` and add a map position in `NODES` in `site/js/map.js`.
+3. Register its limits with the server (Supabase → SQL Editor):
+   ```sql
+   insert into private.levels (id, title, max_score, min_ms) values ('S1', 'Freeze Watch', 7000, 30000);
+   ```
+4. Push to `main`. GitHub Pages redeploys in about a minute. The new level's best score automatically adds to every player's Valley Score.
 
 ---
 

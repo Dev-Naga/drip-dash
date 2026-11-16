@@ -3,11 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-  <title>Drip Dash | inCon-trol Water Systems</title>
-  <meta name="description" content="Help Drip race through irrigation fields, pump stations and fountain plazas. Top the monthly inCon-trol Water Systems leaderboard.">
+  <title>Drip Dash: Bring Back the Flow | inCon-trol Water Systems</title>
+  <meta name="description" content="A storm knocked out Wellbrook's water systems. Help Drip restore pumps, fields, rain tanks, the water tower and the plaza fountain, then top the monthly leaderboard.">
   <meta name="theme-color" content="#005695">
-  <meta property="og:title" content="Drip Dash by inCon-trol Water Systems">
-  <meta property="og:description" content="Small drop. Big pressure. Can you top this month's leaderboard?">
+  <meta property="og:title" content="Drip Dash: Bring Back the Flow">
+  <meta property="og:description" content="Restore Wellbrook's water systems, one valve at a time. Can you top this month's leaderboard?">
   <meta property="og:image" content="assets/og-card.jpg">
   <link rel="icon" href="assets/drip-mascot.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -16,50 +16,43 @@
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body class="game-page">
-  <main id="stage">
-    <canvas id="game" aria-label="Drip Dash game area. Tap, click or press Space to jump; swipe down or press Down to slide."></canvas>
+  <main id="stage" class="v2">
+    <canvas id="game" aria-label="Drip Dash game. Tap or click valves, pumps and controls."></canvas>
 
-    <!-- in-game controls -->
-    <div id="hud-buttons" hidden>
+    <div id="top-buttons" hidden>
       <button id="btn-pause" class="icon-btn" aria-label="Pause">❚❚</button>
+      <button id="btn-album" class="icon-btn" aria-label="Achievements and Field Notes">🏅</button>
+      <button id="btn-board-top" class="icon-btn" aria-label="Leaderboard">🏆</button>
       <button id="btn-mute" class="icon-btn" aria-label="Mute sound">🔊</button>
     </div>
-    <button id="btn-slide" class="slide-btn" aria-label="Slide" hidden>⬇<span>SLIDE</span></button>
-
-    <div id="demo-badge" hidden title="Scores are saved only in this browser until the shared leaderboard is connected.">DEMO MODE · local scores only</div>
+    <div id="demo-badge" hidden>DEMO MODE · local scores only</div>
 
     <!-- TITLE -->
     <section id="screen-title" class="screen" aria-label="Title">
       <div class="card title-card">
         <a class="brand" href="https://www.incontrolwatersystems.com" target="_blank" rel="noopener"><img src="assets/logo-incontrol.png" alt="inCon-trol Water Systems" width="220"></a>
-        <img class="mascot" src="assets/drip-mascot.svg" alt="" width="110" height="138">
+        <img class="mascot" src="assets/drip-mascot.svg" alt="" width="96" height="120">
         <h1>Drip Dash</h1>
-        <p class="tagline">Small drop. Big pressure.</p>
+        <p class="tagline">Bring Back the Flow</p>
         <p class="month-banner" id="month-banner"></p>
         <button id="btn-play" class="btn primary big">Play</button>
         <div class="row">
           <button id="btn-board" class="btn">Leaderboard</button>
-          <button id="btn-howto" class="btn">How to play</button>
+          <button id="btn-album2" class="btn">Album</button>
         </div>
         <p id="player-chip" class="player-chip" hidden></p>
-        <p class="rotate-tip">📱↻ Tip: turn your phone sideways for a wider view.</p>
       </div>
     </section>
 
-    <!-- HOW TO -->
-    <section id="screen-howto" class="screen" hidden aria-label="How to play">
-      <div class="card">
-        <h2>How to play</h2>
-        <ul class="howto">
-          <li><b>Jump:</b> tap the screen, click, or press <kbd>Space</kbd>/<kbd>↑</kbd>. Tap again in the air to <b>double-jump</b>.</li>
-          <li><b>Hold</b> for a higher jump. Tall standpipes need it.</li>
-          <li><b>Slide:</b> swipe down, tap <b>SLIDE</b>, or press <kbd>↓</kbd> to get under low main lines.</li>
-          <li>Time the <b>geysers</b>: run past when they're off, or double-jump over the spray.</li>
-          <li>Grab <b>drops</b> (+10) in a row to build a combo up to <b>x5</b>. <b>Golden valves</b> are worth +150.</li>
-          <li>Power-ups: <b>Pressure Regulator</b> blocks one hit, <b>Smart Controller</b> pulls drops toward you, <b>Flow Meter</b> doubles points.</li>
-          <li>It gets faster the farther you go. Your best score each month counts.</li>
-        </ul>
-        <button class="btn primary" data-back>Got it</button>
+    <!-- STORY -->
+    <section id="screen-story" class="screen" hidden aria-label="Story">
+      <div class="card story-card">
+        <div class="story-art" id="story-art"></div>
+        <h2 id="story-title"></h2>
+        <p id="story-text"></p>
+        <div class="dots" id="story-dots"></div>
+        <button id="btn-story-next" class="btn primary big">Next</button>
+        <button id="btn-story-skip" class="btn link">Skip story</button>
       </div>
     </section>
 
@@ -67,7 +60,7 @@
     <section id="screen-register" class="screen" hidden aria-label="Register">
       <form id="form-register" class="card form" novalidate>
         <h2>Join the leaderboard</h2>
-        <p class="muted">Enter your work details so your scores count toward the monthly competition.</p>
+        <p class="muted">Your scores count toward the monthly competition.</p>
         <label>Display name <small>(shown publicly)</small>
           <input name="name" required minlength="2" maxlength="24" autocomplete="nickname" placeholder="e.g. Jane D.">
         </label>
@@ -86,20 +79,57 @@
       </form>
     </section>
 
-    <!-- GAME OVER -->
-    <section id="screen-over" class="screen" hidden aria-label="Game over">
-      <div class="card over-card">
-        <p class="over-kicker" id="over-kicker">Splash!</p>
-        <p class="over-score" id="over-score">0</p>
-        <p class="over-best" id="over-best"></p>
-        <ul class="over-stats" id="over-stats"></ul>
-        <p class="over-rank" id="over-rank"></p>
-        <button id="btn-save" class="btn primary" hidden>Save this score</button>
-        <button id="btn-again" class="btn primary big">Play again</button>
-        <div class="row">
-          <button id="btn-board2" class="btn">Leaderboard</button>
-          <button id="btn-share" class="btn">Challenge a colleague</button>
+    <!-- LEVEL BRIEFING -->
+    <section id="screen-level" class="screen" hidden aria-label="Level briefing">
+      <div class="card level-card">
+        <p class="kicker" id="lv-kicker"></p>
+        <h2 id="lv-title"></h2>
+        <p class="muted" id="lv-place"></p>
+        <ul class="brief">
+          <li><b>You'll learn:</b> <span id="lv-concept"></span></li>
+          <li><b>Bonus challenge:</b> <span id="lv-bonus"></span></li>
+          <li><b>Your best:</b> <span id="lv-best"></span></li>
+        </ul>
+        <button id="btn-lv-play" class="btn primary big">Start</button>
+        <button class="btn link" data-to="map">Back to map</button>
+      </div>
+    </section>
+
+    <!-- RESULTS -->
+    <section id="screen-results" class="screen" hidden aria-label="Level results">
+      <div class="card results-card">
+        <p class="kicker" id="rs-kicker"></p>
+        <div class="stars" id="rs-stars"></div>
+        <p class="over-score" id="rs-score">0</p>
+        <p class="over-best" id="rs-best"></p>
+        <ul class="breakdown" id="rs-breakdown"></ul>
+        <div class="fieldnote" id="rs-note" hidden>
+          <img id="rs-photo" alt="">
+          <div><p class="fn-k">📸 Field Note unlocked</p><p class="fn-cap" id="rs-cap"></p><p id="rs-notetext"></p></div>
         </div>
+        <div id="rs-ach"></div>
+        <p class="over-rank" id="rs-rank"></p>
+        <button id="btn-save" class="btn primary" hidden>Save my score</button>
+        <button id="btn-next" class="btn primary big">Next level</button>
+        <div class="row">
+          <button id="btn-replay" class="btn">Replay</button>
+          <button class="btn" data-to="map">Map</button>
+          <button id="btn-share" class="btn">Challenge</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ALBUM -->
+    <section id="screen-album" class="screen" hidden aria-label="Album">
+      <div class="card board-card">
+        <h2>🏅 Album</h2>
+        <div class="tabs" role="tablist">
+          <button role="tab" data-atab="ach" aria-selected="true">Achievements</button>
+          <button role="tab" data-atab="notes">Field Notes</button>
+          <button role="tab" data-atab="outfits">Outfits</button>
+        </div>
+        <div class="album-body" id="album-body"></div>
+        <button class="btn primary" data-back>Back</button>
       </div>
     </section>
 
@@ -110,7 +140,7 @@
         <div id="board"></div>
         <div class="row">
           <button class="btn primary" data-back>Back</button>
-          <a class="btn" href="leaderboard.html" target="_blank">Open full page</a>
+          <a class="btn" href="leaderboard.html" target="_blank">Full page</a>
         </div>
       </div>
     </section>
@@ -120,10 +150,12 @@
       <div class="card">
         <h2>Paused</h2>
         <button id="btn-resume" class="btn primary big">Resume</button>
-        <button id="btn-quit" class="btn link">End run</button>
+        <button id="btn-restart" class="btn">Restart level</button>
+        <button class="btn link" id="btn-quit">Back to map</button>
       </div>
     </section>
 
+    <div id="rotate" hidden><div>📱↻<p>Turn your phone sideways to play</p><button class="btn" id="btn-rotate-ok">Play anyway</button></div></div>
     <div id="toast" role="status" hidden></div>
   </main>
   <script type="module" src="js/main.js"></script>

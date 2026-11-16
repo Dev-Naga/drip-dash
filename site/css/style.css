@@ -128,3 +128,54 @@ kbd { font-family: var(--ui); background: var(--mist); border: 1px solid var(--b
   .btn.big { min-height: 48px; font-size: 22px; }
 }
 @media (prefers-reduced-motion: reduce) { .mascot, .card { animation: none; } }
+
+/* ================= v2: Bring Back the Flow ================= */
+#stage.v2 { background: #06203a; }
+#top-buttons { position: absolute; top: max(8px, env(safe-area-inset-top)); right: 10px; display: flex; gap: 8px; z-index: 3; }
+#top-buttons .icon-btn { background: rgba(0, 40, 80, .7); }
+.kicker { margin: 0; color: var(--blue60); font-weight: 700; letter-spacing: 1px; text-transform: uppercase; font-size: 15px; }
+.story-card { width: min(560px, 100%); }
+.story-art canvas { width: 100%; height: auto; border-radius: 12px; display: block; margin-bottom: 10px; }
+.story-card p { font-size: 19px; line-height: 1.4; margin: 6px 0 12px; }
+.dots { display: flex; gap: 6px; justify-content: center; margin-bottom: 12px; }
+.dots span { width: 9px; height: 9px; border-radius: 50%; background: var(--blue30); }
+.dots span.on { background: var(--blue); width: 22px; border-radius: 5px; }
+.level-card .brief { list-style: none; padding: 0; margin: 10px 0 16px; text-align: left; font-size: 18px; }
+.level-card .brief li { padding: 6px 10px; background: var(--mist); border-radius: 10px; margin-bottom: 6px; }
+.results-card { width: min(520px, 100%); max-height: calc(100dvh - 24px); overflow-y: auto; }
+.stars { font-size: 46px; line-height: 1; letter-spacing: 6px; margin: 4px 0; }
+.stars span { color: #d4dce6; display: inline-block; }
+.stars span.on { color: #ffc93a; animation: starpop .5s backwards cubic-bezier(.2, 1.6, .4, 1); text-shadow: 0 2px 0 #a77b00; }
+@keyframes starpop { from { transform: scale(0) rotate(-40deg); } }
+.breakdown { list-style: none; padding: 0; margin: 6px 0 10px; text-align: left; font-size: 16px; }
+.breakdown li { display: flex; justify-content: space-between; padding: 3px 8px; border-bottom: 1px dashed var(--blue30); }
+.breakdown b { color: var(--deep); }
+.fieldnote { display: grid; grid-template-columns: 120px 1fr; gap: 12px; text-align: left; background: var(--mist); border-radius: 12px; padding: 10px; margin: 8px 0; }
+.fieldnote img { width: 120px; height: 120px; object-fit: cover; border-radius: 8px; }
+.fieldnote p { margin: 0 0 4px; font-size: 15px; line-height: 1.3; }
+.fn-k { font-weight: 700; color: var(--blue); }
+.fn-cap { font-weight: 700; color: var(--deep); }
+.ach-pop { background: #fff7d6; border: 1px solid #ffd23f; border-radius: 10px; padding: 6px 10px; margin: 6px 0; text-align: left; font-size: 15px; }
+.album-body { overflow-y: auto; flex: 1; min-height: 160px; margin-bottom: 12px; text-align: left; }
+.ach-list { list-style: none; padding: 0; margin: 0; }
+.ach-list li { display: flex; gap: 10px; align-items: center; padding: 8px; border-bottom: 1px solid var(--mist); opacity: .55; }
+.ach-list li.got { opacity: 1; }
+.ach-list span { font-size: 24px; }
+.ach-list b { display: block; font-size: 17px; }
+.ach-list small { color: var(--muted); font-size: 14px; }
+.notes { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.notes figure { margin: 0; background: var(--mist); border-radius: 10px; overflow: hidden; }
+.notes img, .notes .ph { width: 100%; height: 120px; object-fit: cover; display: grid; place-items: center; font-size: 30px; background: #cfd9e4; }
+.notes figcaption { padding: 6px 8px; font-size: 13px; }
+.notes figcaption b { display: block; font-size: 14px; }
+.notes figure.locked { opacity: .6; }
+.outfits { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; }
+.outfit { border: 2px solid var(--blue30); background: #fff; border-radius: 12px; padding: 6px; cursor: pointer; font: inherit; display: flex; flex-direction: column; align-items: center; }
+.outfit.on { border-color: var(--aqua); box-shadow: 0 0 0 3px rgba(0,193,213,.3); }
+.outfit:disabled { opacity: .5; cursor: not-allowed; }
+.outfit canvas { width: 90px; height: auto; }
+.outfit small { color: var(--muted); }
+#rotate { position: absolute; inset: 0; z-index: 10; background: rgba(6,32,58,.96); color: #fff; display: grid; place-items: center; text-align: center; font-size: 44px; }
+#rotate p { font-size: 22px; margin: 8px 0 16px; }
+#rotate[hidden] { display: none; }
+#stage.v2 #demo-badge { left: auto; right: 10px; transform: none; bottom: max(6px, env(safe-area-inset-bottom)); }

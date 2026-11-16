@@ -29,7 +29,7 @@
     import { LIVE } from './js/config.js';
     import { store } from './js/api.js';
     document.getElementById('mode-note').textContent = LIVE
-      ? 'Scores update live. Monthly winners are confirmed by inCon-trol after the month closes.'
+      ? 'Valley Score = your best score on every level, added up. Monthly winners are confirmed by inCon-trol after the month closes.'
       : 'DEMO MODE: the shared leaderboard is not connected yet, so this page shows sample data and scores from this browser only.';
     const board = mountBoard(document.getElementById('board'), { me: store.get('dripdash.player') });
     setInterval(() => document.visibilityState === 'visible' && board.refresh(), 60000);

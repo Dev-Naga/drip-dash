@@ -23,13 +23,13 @@ export function mountBoard(root, { me = null } = {}) {
     try {
       if (tab === 'month' || tab === 'all') {
         const rows = await api.leaderboard(tab, 50);
-        const caption = tab === 'month' ? `${monthLabel(month)} — best score per player. Resets on the 1st (Central Time).` : 'Best score ever, per player.';
+        const caption = tab === 'month' ? `${monthLabel(month)} Valley Score: each player's best score on every level played this month, added up. Resets on the 1st (Central Time).` : 'All-time Valley Score: best score on every level, added up.';
         body.innerHTML = rows.length ? `
           <p class="muted small">${esc(caption)}</p>
           <ol class="rows">${rows.map((r) => `
             <li class="${me && r.display_name === me.display_name && r.company === me.company ? 'me' : ''} ${r.rank <= 3 ? 'top' : ''}">
               <span class="rk">${medal(r.rank)}</span>
-              <span class="who"><b>${esc(r.display_name)}</b><small>${esc(r.company)}</small></span>
+              <span class="who"><b>${esc(r.display_name)}</b><small>${esc(r.company)}${r.levels ? ` · ${r.levels} level${r.levels === 1 ? '' : 's'}` : ''}</small></span>
               <span class="sc">${Number(r.score).toLocaleString()}</span>
             </li>`).join('')}</ol>`
           : `<p class="muted center">No scores yet this ${tab === 'month' ? 'month' : 'season'}. Be the first!</p>`;
@@ -53,7 +53,7 @@ export function mountBoard(root, { me = null } = {}) {
           <h3 class="month-h">${esc(monthLabel(m))}</h3>
           <ol class="rows">${byMonth[m].map((r) => `
             <li class="top"><span class="rk">${medal(r.rank)}</span>
-              <span class="who"><b>${esc(r.display_name)}</b><small>${esc(r.company)}</small></span>
+              <span class="who"><b>${esc(r.display_name)}</b><small>${esc(r.company)}${r.levels ? ` · ${r.levels} level${r.levels === 1 ? '' : 's'}` : ''}</small></span>
               <span class="sc">${Number(r.score).toLocaleString()}</span></li>`).join('')}</ol>`).join('');
       }
     } catch (e) {
