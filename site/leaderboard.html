@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Drip Dash Leaderboard | inCon-trol Water Systems</title>
+  <meta name="description" content="Monthly and all-time Drip Dash leaderboard for inCon-trol Water Systems customers.">
+  <meta name="theme-color" content="#005695">
+  <link rel="icon" href="assets/drip-mascot.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Zilla+Slab:ital,wght@0,700;1,700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="page">
+  <div class="page-wrap">
+    <header class="page-head">
+      <a href="https://www.incontrolwatersystems.com" target="_blank" rel="noopener"><img src="assets/logo-incontrol.png" alt="inCon-trol Water Systems"></a>
+      <a class="btn primary" href="./">▶ Play Drip Dash</a>
+    </header>
+    <div class="card board-card" style="max-height:none">
+      <h1>🏆 Drip Dash Leaderboard</h1>
+      <p class="muted small" id="mode-note"></p>
+      <div id="board"></div>
+    </div>
+  </div>
+  <script type="module">
+    import { mountBoard } from './js/board.js';
+    import { LIVE } from './js/config.js';
+    import { store } from './js/api.js';
+    document.getElementById('mode-note').textContent = LIVE
+      ? 'Scores update live. Monthly winners are confirmed by inCon-trol after the month closes.'
+      : 'DEMO MODE: the shared leaderboard is not connected yet, so this page shows sample data and scores from this browser only.';
+    const board = mountBoard(document.getElementById('board'), { me: store.get('dripdash.player') });
+    setInterval(() => document.visibilityState === 'visible' && board.refresh(), 60000);
+  </script>
+</body>
+</html>

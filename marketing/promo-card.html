@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Drip Dash promo card</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Zilla+Slab:ital,wght@0,700;1,700&display=swap" rel="stylesheet">
+<style>
+  html, body { margin: 0; width: 1200px; height: 630px; overflow: hidden; }
+  body { font-family: "Barlow Condensed", sans-serif; background: radial-gradient(circle at 30% 40%, #2F8FD0 0%, #005695 55%, #003a66 100%); color: #fff; position: relative; }
+  .waves { position: absolute; left: 0; right: 0; bottom: 0; height: 170px; }
+  .mascot { position: absolute; left: 90px; top: 70px; width: 340px; filter: drop-shadow(0 18px 24px rgba(0,0,0,.3)); }
+  .copy { position: absolute; left: 480px; top: 64px; width: 700px; }
+  .copy h1 { white-space: nowrap; font-size: 116px; }
+  .logo { background: #fff; border-radius: 16px; padding: 10px 18px; display: inline-block; }
+  .logo img { width: 280px; display: block; }
+  h1 { font-family: "Zilla Slab", serif; font-size: 132px; line-height: .9; margin: 26px 0 6px; letter-spacing: -2px; text-shadow: 0 6px 0 rgba(0,40,80,.35); }
+  .tag { font-family: "Zilla Slab", serif; font-style: italic; font-size: 40px; color: #A4E6F2; margin: 0 0 22px; }
+  .cta { display: inline-block; background: #00C1D5; color: #003a66; font-weight: 700; font-size: 40px; padding: 10px 30px; border-radius: 16px; letter-spacing: 1px; }
+  .sub { font-size: 28px; margin-top: 14px; color: #dbe8f5; font-weight: 600; }
+</style>
+</head>
+<body>
+  <svg class="waves" viewBox="0 0 1200 170" preserveAspectRatio="none">
+    <path d="M0 70 C 200 10 380 130 600 70 S 1000 10 1200 60 V170 H0Z" fill="#5D85B7" opacity=".55"/>
+    <path d="M0 110 C 220 60 420 160 640 110 S 1020 60 1200 100 V170 H0Z" fill="#A4B7D7" opacity=".5"/>
+  </svg>
+  <img class="mascot" src="../site/assets/drip-mascot.svg" alt="">
+  <div class="copy">
+    <span class="logo"><img src="../site/assets/logo-incontrol.png" alt="inCon-trol Water Systems"></span>
+    <h1>DRIP DASH</h1>
+    <p class="tag">Small drop. Big pressure.</p>
+    <span class="cta">▶ PLAY NOW</span>
+    <div class="sub">Top the monthly customer leaderboard 🏆</div>
+  </div>
+</body>
+</html>

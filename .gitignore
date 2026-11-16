@@ -1,0 +1,7 @@
+# original high-res brand files stay in Egnyte, not in the public repo
+brand-source/
+node_modules/
+.claude/
+*.log
+.DS_Store
+Thumbs.db
