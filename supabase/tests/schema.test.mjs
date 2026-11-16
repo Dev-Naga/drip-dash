@@ -83,27 +83,70 @@ ok(!r.accepted && /stars/.test(r.reason), `zero-star submission rejected (${r.re
   ok(x.accepted, 'anonymous ticket claimed after registering');
 }
 
-const lb = await q(`select * from get_leaderboard('month', null, 10)`);
+const lb = await q(`select * from get_leaderboard('month', null, 10, 'flow')`);
 ok(lb[0].display_name === 'Jane D.' && Number(lb[0].score) === 11100 && Number(lb[0].levels) === 2 && !('email' in lb[0]), 'monthly valley leaderboard ' + JSON.stringify(lb.map((x) => [Number(x.rank), x.display_name, Number(x.score), Number(x.levels)])));
-const co = await q(`select * from get_company_board('month', 10)`);
+const co = await q(`select * from get_company_board('month', 10, 'flow')`);
 ok(co[0].company === 'Acme Landscaping' && Number(co[0].total) === 15600, 'company board sums top 3 valley scores: ' + JSON.stringify(co.map((c) => [c.company, Number(c.total)])));
 
 await asAdmin();
 await q(`update runs set month = to_char((now() at time zone 'America/Chicago') - interval '1 month','YYYY-MM') where player_id = (select id from players where email_norm='bob@builders.com')`);
 await asAnon();
-const w = await q(`select * from get_monthly_winners(12)`);
+const w = await q(`select * from get_monthly_winners(12, 'flow')`);
 ok(w.length === 1 && w[0].display_name === 'Bob B.', 'past winners ' + JSON.stringify(w.map((x) => [x.month, x.display_name, Number(x.score)])));
-const all = await q(`select * from get_leaderboard('all', null, 10)`);
+const all = await q(`select * from get_leaderboard('all', null, 10, 'flow')`);
 ok(all.some((x) => x.display_name === 'Bob B.'), 'all-time board includes earlier months');
 
 await asAdmin(); await q(`update players set is_blocked = true where email_norm = 'carl@parks.gov'`); await asAnon();
-ok(!(await q(`select * from get_leaderboard('month', null, 10)`)).some((x) => x.display_name === 'Carl'), 'blocked player hidden');
+ok(!(await q(`select * from get_leaderboard('month', null, 10, 'flow')`)).some((x) => x.display_name === 'Carl'), 'blocked player hidden');
 await expectErr(async () => { for (let i = 0; i < 8; i++) await q(`select start_run($1,'L1')`, [jane.player_key]); }, 'per-player start rate limit');
 
 await asAdmin();
-const adm = await q(`select * from admin.monthly_standings limit 5`);
+const adm = await q(`select * from admin.flow_standings limit 5`);
 ok(adm.length >= 1 && adm[0].email && adm[0].per_level, 'admin standings view: ' + JSON.stringify(adm[0].per_level));
 const rej = await q(`select count(*)::int n from admin.rejected_runs`);
 ok(rej[0].n >= 5, `rejected runs recorded for review (${rej[0].n})`);
+
+// ---------------------------------------------------------------- Drip Dash runner ('dash')
+await asAnon();
+const erin = (await q(`select register_player('erin@acme.com','Erin','Acme Landscaping',true) r`))[0].r;
+async function dash(key, secs, score, dist, drops, valves) {
+  const t = (await q(`select start_run($1) r`, [key]))[0].r;            // default level = RUN
+  await asAdmin(); await q(`update runs set started_at = now() - make_interval(secs => $1) where id = $2`, [secs + 1, t.run_id]); await asAnon();
+  return (await q(`select submit_run($1,$2,$3,$4,$5,$6,$7) r`, [t.run_id, key, score, Math.round(secs * 1000), dist, drops, valves]))[0].r;
+}
+r = await dash(erin.player_key, 40, 4200, 2600, 60, 3);
+ok(r.accepted && r.best_month === 4200 && r.month_rank === 1, `runner: valid run accepted (${JSON.stringify(r)})`);
+r = await dash(erin.player_key, 30, 3000, 1800, 40, 2);
+ok(r.accepted && r.best_month === 4200, 'runner: board keeps best single run (not a sum)');
+r = await dash(erin.player_key, 10, 99999, 900, 10, 0);
+ok(!r.accepted && /bonus/.test(r.reason), `runner: inflated score rejected (${r.reason})`);
+r = await dash(erin.player_key, 5, 2000, 2000, 0, 0);
+ok(!r.accepted && /distance/.test(r.reason), `runner: impossible distance rejected (${r.reason})`);
+{
+  const t = (await q(`select start_run($1,'L1') r`, [erin.player_key]))[0].r;
+  await asAdmin(); await q(`update runs set started_at = now() - interval '30 seconds' where id = $1`, [t.run_id]); await asAnon();
+  const x = (await q(`select submit_run($1,$2,500,20000,400,0,0) r`, [t.run_id, erin.player_key]))[0].r;
+  ok(!x.accepted && /not for Drip Dash/.test(x.reason), `runner: Flow ticket can't be used for a runner score (${x.reason})`);
+}
+{
+  const t = (await q(`select start_run($1) r`, [erin.player_key]))[0].r;
+  await asAdmin(); await q(`update runs set started_at = now() - interval '30 seconds' where id = $1`, [t.run_id]); await asAnon();
+  const x = (await q(`select submit_level($1,$2,'RUN',500,20000,3) r`, [t.run_id, erin.player_key]))[0].r;
+  ok(!x.accepted, 'runner ticket can\'t be submitted as a Flow level');
+}
+const dlb = await q(`select * from get_leaderboard('month', null, 10)`);
+ok(dlb.length === 1 && dlb[0].display_name === 'Erin' && Number(dlb[0].score) === 4200 && dlb[0].levels === null, 'runner board is the default and only has runner players ' + JSON.stringify(dlb.map((x) => [x.display_name, Number(x.score)])));
+const flb = await q(`select * from get_leaderboard('month', null, 10, 'flow')`);
+ok(!flb.some((x) => x.display_name === 'Erin'), 'Flow board does not include runner scores');
+const dco = await q(`select * from get_company_board('month', 10, 'dash')`);
+ok(dco.length === 1 && Number(dco[0].total) === 4200, 'runner company board');
+const me = (await q(`select get_player_summary($1) r`, [erin.player_key]))[0].r;
+const meFlow = (await q(`select get_player_summary($1, 'flow') r`, [erin.player_key]))[0].r;
+ok(me.best_month === 4200 && meFlow.month_score === 0, 'player summary is per game');
+await asAdmin();
+const dadm = await q(`select * from admin.dash_standings limit 5`);
+ok(dadm.length === 1 && dadm[0].email === 'erin@acme.com' && dadm[0].best_score === 4200, 'admin runner standings view');
+const exp = await q(`select * from admin.player_export where email = 'erin@acme.com'`);
+ok(exp[0].dash_best_score === 4200, 'player export includes both games');
 console.log(fails ? `\n${fails} FAILURE(S)` : '\nALL TESTS PASSED');
 process.exit(fails ? 1 : 0);

@@ -1,36 +1,29 @@
-# Drip Dash: *Bring Back the Flow*
-**inCon-trol Water Systems newsletter game**
+# Drip Dash: inCon-trol Water Systems newsletter games
 
-A lightning storm has knocked out the **Heartboard**, the master control panel of the small Texas town of Wellbrook, and every water system has gone still. Players help **Drip** the droplet and **Gauge**, a gruff old pressure gauge, restore the valley one system at a time.
+Two browser games share one site, one sign-up and one backend:
 
-Each level is a *living blueprint*: a pale schematic that fills with color, motion and sound as the player operates real equipment.
-
-| # | Level | What the player does | Real-world concept |
+| Game | Where | What it is | Leaderboard |
 |---|---|---|---|
-| 1 | Wake the Water | Open valves in order, start the pump, fill the ground storage tank into the band | Valves, pumps, tank levels, intake screens |
-| 2 | The Pressure Dance | Drag a VFD dial to hold 55–70 PSI; bring a second pump online for the demand spike | VFDs, lead/lag pump stations |
-| 3 | Before Sunrise | Schedule six field zones before dawn; max two at a time; dodge wind gusts | Irrigation zones and station capacity |
-| 4 | Catch the Storm | Divert the dirty first flush, catch clean rain, clear the gutter, water the garden | Rainwater harvesting, first-flush diversion |
-| 5 | Lift to the Sky | Pulse a booster to beat rising head, survive the dinner rush, close the main slowly | Head vs. elevation, overheating, water hammer |
-| 6 | The Grand Show | Dose and backwash in the equipment vault, then play the fountain show on the beat | Water features, fiberglass vaults, chemical injection |
-| 7 | Evening Rush | Run every system at once from the rebuilt Heartboard | UL 508A control panels, HMI/SCADA |
+| **Drip Dash** (main game) | `/` | One-tap endless runner: Drip races through turf fields, a pump station and a fountain plaza, dodging sprinklers, valve boxes, standpipes, low main lines and geysers | Best single run per player |
+| **Bring Back the Flow** | `/flow/` | 7-level story adventure: restore Wellbrook's water systems by operating valves, pumps, VFDs, zones, a rain diverter, a water tower and a fountain show | Valley Score (best score on each level, added up) |
 
-Each level also has:
-- 1–3 stars
-- 3 hidden golden drops
-- a bonus challenge
-- a **Field Note**: a real inCon-trol project photo (Prosper MS 4, Denton HS, Sandbrock Ranch Elementary, Melissa TxDOT, American Airlines HQ, Chase Tower)
+Players switch games from the menus: the Drip Dash title screen has a **NEW: Bring Back the Flow** card and its game-over screen has a link; Flow's title screen links back. The leaderboard page has a tab for each game.
 
-Across the game there are 13 achievements and 5 unlockable outfits. The leaderboard ranks the **Valley Score**, which is the sum of each player's best score on every level, per month and all-time, plus a company board.
+**Character customization (Drip Dash):** *Customize Drip* on the title screen (or *Change outfit* after a run) opens the outfit picker:
+- Classic Drip and Hard Hat are available from the start.
+- Hi-Vis Vest, 25th Anniversary Aqua and Golden Drip unlock at best runs of 1,000, 2,500 and 5,000.
+
+The chosen outfit is worn in the game and shown on the title screen. Bring Back the Flow keeps its own star-based outfits in its Album.
 
 | | URL |
 |---|---|
-| Game | https://dev-naga.github.io/drip-dash/ |
-| Leaderboard | https://dev-naga.github.io/drip-dash/leaderboard.html |
+| Drip Dash (main) | https://dev-naga.github.io/drip-dash/ |
+| Bring Back the Flow | https://dev-naga.github.io/drip-dash/flow/ |
+| Leaderboards | https://dev-naga.github.io/drip-dash/leaderboard.html (add `?game=flow` for Flow) |
 | Rules & privacy | https://dev-naga.github.io/drip-dash/rules.html |
-| Design document | [docs/GAME_DESIGN.md](docs/GAME_DESIGN.md) |
+| Flow design document | [docs/GAME_DESIGN.md](docs/GAME_DESIGN.md) |
 
-> **Status:** the game is live in **DEMO MODE**, so scores are saved in each player's browser only, until a Supabase project is connected. See [docs/ADMIN_GUIDE.md](docs/ADMIN_GUIDE.md), section 1.
+> **Status:** live in **DEMO MODE** (scores saved per browser) until a Supabase project is connected. See [docs/ADMIN_GUIDE.md](docs/ADMIN_GUIDE.md), section 1.
 
 ## Stack
 - **Game:** plain HTML5 Canvas and JavaScript modules on a fixed 960×540 stage that scales to any screen. No framework, no build step, and all art is drawn in code. Portrait phones get a "rotate" prompt with a "play anyway" option.
@@ -41,7 +34,10 @@ Across the game there are 13 achievements and 5 unlockable outfits. The leaderbo
 ## Folder map
 ```
 site/
-  index.html            screens: title, story, register, briefing, results, album, leaderboard, pause
+  index.html            Drip Dash (runner): title, outfits, how-to, register, game over, leaderboard
+  js/game.js, main.js   runner engine (+ outfits) and runner screens
+  flow/index.html       Bring Back the Flow: title, story, register, briefing, results, album, leaderboard
+  js/flow-main.js       Flow screens
   js/engine.js          stage scaling, input, loop, particles, Drip + Gauge characters, dialog
   js/kit.js             living-blueprint parts: Pipe, Valve, Pump, Meter, Tank, Slider, Btn
   js/levelbase.js       shared level framework (timer, golden drops, scoring, win/fail)
@@ -62,7 +58,7 @@ marketing/              newsletter hero images
 ```bash
 python -m http.server 5173 --directory site
 ```
-Then open http://localhost:5173. Add `?level=L4&dev` to jump straight to a level.
+Then open http://localhost:5173 (runner) or http://localhost:5173/flow/ (add `?level=L4&dev` to jump to a Flow level).
 
 Database tests:
 ```bash

@@ -39,9 +39,12 @@ Months follow **US Central time**. The leaderboard rolls over automatically at m
 
 1. In Supabase, open **SQL Editor** and run (change the month):
    ```sql
-   select * from admin.monthly_standings where month = '2026-11' limit 20;
+   -- Drip Dash (main game): best run per player
+   select * from admin.dash_standings where month = '2026-11' limit 20;
+   -- Bring Back the Flow: Valley Score (best score per level, added up) with a per-level breakdown
+   select * from admin.flow_standings where month = '2026-11' limit 20;
    ```
-   This shows name, company, **email**, the month's **Valley Score** (best score on each level, added up), how many levels they completed, games played and a per-level breakdown.
+   Both show name, company and **email** for the top players.
 2. Review the top 5. Things to look out for:
    - a huge score from someone with only 1–2 games
    - several accounts from the same company with near-identical scores
@@ -56,7 +59,7 @@ Months follow **US Central time**. The leaderboard rolls over automatically at m
    -- block a player completely (hidden from all boards, can't submit)
    update public.players set is_blocked = true where email_norm = 'someone@example.com';
    ```
-5. The **Past Winners** tab fills itself from the top 3 verified scores of each closed month.
+5. Each game's **Past Winners** tab fills itself from the top 3 verified scores of each closed month.
 6. Announce the winners in the newsletter (template in section 5).
 
 ### Fix an offensive display name
@@ -72,7 +75,7 @@ update public.players set display_name = 'Player 123' where email_norm = 'someon
 |---|---|
 | Public leaderboard (month, all-time, companies, past winners) | `https://<your-site>/leaderboard.html` |
 | In-game leaderboard | **Leaderboard** button in the game, or `https://<your-site>/?view=leaderboard` |
-| Everything incl. emails (admins only) | Supabase → SQL Editor → `select * from admin.monthly_standings;` |
+| Everything incl. emails (admins only) | Supabase → SQL Editor → `select * from admin.dash_standings;` (runner) or `admin.flow_standings` (Flow) |
 | Raw tables | Supabase → Table Editor → `players`, `runs` |
 | Suspicious runs auto-rejected | `select * from admin.rejected_runs;` |
 
@@ -95,7 +98,7 @@ The game pre-fills the registration form from these values. If a token is empty,
 
 ### b) Sync players back to HubSpot (monthly, about 5 minutes)
 1. Supabase → SQL Editor: `select * from admin.player_export;` → **Download CSV**.
-2. HubSpot → Contacts → **Import** → match on Email. Map `valley_score_all_time`, `levels_completed` and `games_played` to custom contact properties (create "Drip Dash valley score", "Drip Dash levels" and "Drip Dash games played" once). Use `marketing_opt_in` to decide on newsletter subscription.
+2. HubSpot → Contacts → **Import** → match on Email. Map `dash_best_score`, `flow_valley_score`, `flow_levels_completed` and `games_played` to custom contact properties (create matching "Drip Dash …" properties once). Use `marketing_opt_in` to decide on newsletter subscription.
 3. You can then build HubSpot lists like "played Drip Dash this month" for follow-ups.
 
 ### Later (optional)

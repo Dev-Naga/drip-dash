@@ -179,3 +179,18 @@ kbd { font-family: var(--ui); background: var(--mist); border: 1px solid var(--b
 #rotate p { font-size: 22px; margin: 8px 0 16px; }
 #rotate[hidden] { display: none; }
 #stage.v2 #demo-badge { left: auto; right: 10px; transform: none; bottom: max(6px, env(safe-area-inset-bottom)); }
+
+/* ================= runner: outfits + game switcher ================= */
+.outfit-btn { width: 100%; margin-top: 10px; }
+canvas.mascot { width: 92px; height: auto; display: block; margin: 4px auto 0; }
+.more-game { display: flex; align-items: center; gap: 10px; margin-top: 14px; padding: 10px 12px; border-radius: 14px; text-decoration: none; text-align: left;
+  background: linear-gradient(135deg, #0b2a4a, #005695); color: #fff; box-shadow: 0 6px 18px rgba(0, 40, 80, .25); }
+.more-game:hover { filter: brightness(1.1); }
+.more-game b { display: block; font-family: var(--display); font-size: 19px; }
+.more-game small { display: block; color: var(--blue30); font-size: 14px; line-height: 1.2; }
+.mg-new { background: var(--aqua); color: var(--deep); font-weight: 700; font-size: 12px; padding: 2px 7px; border-radius: 6px; }
+.mg-go { margin-left: auto; font-size: 20px; }
+.game-switch { display: inline-block; margin-top: 12px; color: var(--blue60); font-weight: 600; }
+.game-tabs { margin: 8px 0 4px; }
+.game-tabs a { flex: 1; text-align: center; text-decoration: none; padding: 8px 4px; border-radius: 9px; font-weight: 700; font-size: 16px; color: var(--muted); }
+.game-tabs a[aria-selected=true] { background: #fff; color: var(--blue); box-shadow: 0 1px 4px rgba(0,0,0,.12); }

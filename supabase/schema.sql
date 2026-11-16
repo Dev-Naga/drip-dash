@@ -1,11 +1,13 @@
 -- =====================================================================
--- Drip Dash: Bring Back the Flow — Supabase schema (run once in Supabase → SQL Editor)
+-- Drip Dash games — Supabase schema (run once in Supabase → SQL Editor)
 -- Safe to re-run: functions are replaced, tables/columns created if missing.
 --
--- Scoring model
---   * Each completed level submits one run (score, stars, duration).
---   * VALLEY SCORE = sum of a player's best score on each level in the period.
---   * Monthly board = runs this calendar month (US Central); all-time = every run.
+-- Two games share one backend (players register once, play both):
+--   * 'dash' — Drip Dash, the endless runner (the main game). Runs use level 'RUN'.
+--     Leaderboard = each player's best single run in the period.
+--   * 'flow' — Bring Back the Flow, the 7-level story game. Runs use levels L1…L7.
+--     Leaderboard = VALLEY SCORE, the sum of a player's best score on each level.
+--   * Monthly boards = runs this calendar month (US Central); all-time = every run.
 --
 -- Security model
 --   * Tables have RLS ON and no policies → the public API key cannot read or
@@ -52,6 +54,9 @@ create table if not exists public.runs (
 );
 alter table public.runs add column if not exists level text;
 alter table public.runs add column if not exists stars smallint;
+alter table public.runs add column if not exists distance integer;
+alter table public.runs add column if not exists drops integer;
+alter table public.runs add column if not exists valves integer;
 create index if not exists runs_board_idx  on public.runs (month, status, player_id, level);
 create index if not exists runs_player_idx on public.runs (player_id, status);
 create index if not exists runs_ip_idx     on public.runs (ip_hash, started_at);
@@ -65,6 +70,7 @@ create table if not exists private.levels (
   active     boolean not null default true
 );
 insert into private.levels (id, title, max_score, min_ms) values
+  ('RUN', 'Drip Dash (runner)', 1000000, 1000),   -- runner runs are checked by submit_run
   ('L1', 'Wake the Water',      7000, 15000),
   ('L2', 'The Pressure Dance',  6500, 55000),
   ('L3', 'Before Sunrise',      7500, 20000),
@@ -98,10 +104,28 @@ language sql stable as $$
   with best as (
     select r.player_id, r.level, max(r.score) s, max(r.submitted_at) at
     from public.runs r join public.players p on p.id = r.player_id
-    where r.status = 'accepted' and not p.is_blocked and (p_month is null or r.month = p_month)
+    where r.status = 'accepted' and not p.is_blocked and r.level <> 'RUN' and (p_month is null or r.month = p_month)
     group by r.player_id, r.level
   )
   select player_id, sum(s)::bigint, count(*)::bigint, max(at) from best group by player_id
+$$;
+
+-- Runner standings: each player's best single run (earliest wins ties).
+create or replace function private.dash(p_month text)
+returns table (player_id uuid, score bigint, levels bigint, last_at timestamptz)
+language sql stable as $$
+  select distinct on (r.player_id) r.player_id, r.score::bigint, null::bigint, r.submitted_at
+  from public.runs r join public.players p on p.id = r.player_id
+  where r.status = 'accepted' and not p.is_blocked and r.level = 'RUN' and (p_month is null or r.month = p_month)
+  order by r.player_id, r.score desc, r.submitted_at asc
+$$;
+
+create or replace function private.standings(p_game text, p_month text)
+returns table (player_id uuid, score bigint, levels bigint, last_at timestamptz)
+language sql stable as $$
+  select * from private.dash(p_month) where coalesce(p_game, 'dash') <> 'flow'
+  union all
+  select * from private.valley(p_month) where p_game = 'flow'
 $$;
 
 -- --------------------------------------------------------------- register_player
@@ -141,7 +165,7 @@ end $$;
 
 -- --------------------------------------------------------------- start_run (one-time ticket per level attempt)
 drop function if exists public.start_run(uuid);
-create or replace function public.start_run(p_player_key uuid default null, p_level text default null)
+create or replace function public.start_run(p_player_key uuid default null, p_level text default 'RUN')
 returns json
 language plpgsql security definer set search_path = public, private as $$
 declare v_pid uuid; v_ip text := private.client_ip_hash(); v_id uuid;
@@ -160,24 +184,67 @@ begin
   return json_build_object('run_id', v_id, 'started_at', now());
 end $$;
 
--- --------------------------------------------------------------- player summary
-create or replace function public.get_player_summary(p_player_key uuid)
+-- --------------------------------------------------------------- player summary (per game)
+drop function if exists public.get_player_summary(uuid);
+create or replace function public.get_player_summary(p_player_key uuid, p_game text default 'dash')
 returns json
 language plpgsql stable security definer set search_path = public, private as $$
 declare v_p public.players; v_m text := private.current_month(); v_ms bigint; v_as bigint; v_rank bigint; v_n bigint;
 begin
   select * into v_p from public.players where player_key = p_player_key;
   if not found then return null; end if;
-  select score into v_ms from private.valley(v_m) where player_id = v_p.id;
-  select score into v_as from private.valley(null) where player_id = v_p.id;
-  select count(*) filter (where score > coalesce(v_ms, -1)) + 1, count(*) into v_rank, v_n from private.valley(v_m);
+  select score into v_ms from private.standings(p_game, v_m) where player_id = v_p.id;
+  select score into v_as from private.standings(p_game, null) where player_id = v_p.id;
+  select count(*) filter (where score > coalesce(v_ms, -1)) + 1, count(*) into v_rank, v_n from private.standings(p_game, v_m);
   return json_build_object('display_name', v_p.display_name, 'company', v_p.company,
-    'month_score', coalesce(v_ms, 0), 'all_score', coalesce(v_as, 0),
+    'month_score', coalesce(v_ms, 0), 'all_score', coalesce(v_as, 0),       -- names used by Bring Back the Flow
+    'best_month', coalesce(v_ms, 0), 'best_all', coalesce(v_as, 0),          -- names used by Drip Dash
     'month_rank', case when v_ms is null then null else v_rank end, 'month_players', v_n);
 end $$;
 
--- --------------------------------------------------------------- submit_level (server-side plausibility checks)
+-- --------------------------------------------------------------- submit_run — Drip Dash runner (plausibility checks)
+-- Game facts used for bounds: top speed ≈ 900 px/s = 90 m/s; drops are worth at most
+-- 10 × 5 (combo) × 2 (Flow Meter) = 100; golden valves at most 300; shield bonus 50 each.
 drop function if exists public.submit_run(uuid, uuid, int, int, int, int, int);
+create or replace function public.submit_run(
+  p_run_id uuid, p_player_key uuid, p_score int, p_duration_ms int,
+  p_distance int, p_drops int, p_valves int
+) returns json
+language plpgsql security definer set search_path = public, private as $$
+declare v_run public.runs; v_pid uuid; v_blocked boolean; v_elapsed_ms numeric; v_reason text := null; v_secs numeric;
+begin
+  select id, is_blocked into v_pid, v_blocked from public.players where player_key = p_player_key;
+  if v_pid is null then raise exception 'Unknown player. Please register again.'; end if;
+  if v_blocked then raise exception 'This account is not eligible.'; end if;
+
+  select * into v_run from public.runs where id = p_run_id for update;
+  if not found then raise exception 'Unknown game ticket.'; end if;
+  if v_run.status <> 'started' then raise exception 'This game was already submitted.'; end if;
+  if v_run.player_id is not null and v_run.player_id <> v_pid then raise exception 'Ticket belongs to another player.'; end if;
+
+  v_elapsed_ms := extract(epoch from (now() - v_run.started_at)) * 1000;
+  v_secs := greatest(p_duration_ms, 0) / 1000.0;
+  if v_run.level is distinct from 'RUN' then v_reason := 'ticket is not for Drip Dash';
+  elsif v_elapsed_ms > 3 * 3600 * 1000 then v_reason := 'ticket expired';
+  elsif p_score is null or p_score < 0 or p_score > 1000000 then v_reason := 'invalid score';
+  elsif p_duration_ms < 1000 then v_reason := 'run too short';
+  elsif p_duration_ms > v_elapsed_ms + 3000 then v_reason := 'run longer than server clock';
+  elsif p_distance < 0 or p_distance > v_secs * 92 + 30 then v_reason := 'distance not possible in that time';
+  elsif p_drops < 0 or p_drops > v_secs * 20 + 10 then v_reason := 'too many drops for run time';
+  elsif p_valves < 0 or p_valves > v_secs / 2 + 3 then v_reason := 'too many valves for run time';
+  elsif p_score < p_distance then v_reason := 'score lower than distance';
+  elsif p_score > p_distance + p_drops * 100 + p_valves * 300 + (v_secs / 13 + 2) * 50 then v_reason := 'score exceeds possible bonus';
+  end if;
+
+  update public.runs set player_id = v_pid, submitted_at = now(), score = p_score, duration_ms = p_duration_ms,
+    distance = p_distance, drops = p_drops, valves = p_valves, month = private.current_month(),
+    status = case when v_reason is null then 'accepted' else 'rejected' end, reject_reason = v_reason
+  where id = p_run_id;
+  update public.players set last_seen_at = now() where id = v_pid;
+  return (jsonb_build_object('accepted', v_reason is null, 'reason', v_reason) || public.get_player_summary(p_player_key, 'dash')::jsonb)::json;
+end $$;
+
+-- --------------------------------------------------------------- submit_level — Bring Back the Flow (per-level limits)
 create or replace function public.submit_level(
   p_run_id uuid, p_player_key uuid, p_level text, p_score int, p_duration_ms int, p_stars int
 ) returns json
@@ -195,7 +262,7 @@ begin
   select * into v_lv from private.levels where id = v_run.level;
 
   v_elapsed := extract(epoch from (now() - v_run.started_at)) * 1000;
-  if v_run.level is distinct from p_level then v_reason := 'ticket is for a different level';
+  if v_run.level is distinct from p_level or p_level = 'RUN' then v_reason := 'ticket is for a different level';
   elsif v_elapsed > 3 * 3600 * 1000 then v_reason := 'ticket expired';
   elsif p_score is null or p_score < 0 or p_score > v_lv.max_score then v_reason := 'score above level maximum';
   elsif p_stars is null or p_stars not between 1 and 3 then v_reason := 'invalid stars';
@@ -209,28 +276,31 @@ begin
   where id = p_run_id;
   update public.players set last_seen_at = now() where id = v_pid;
 
-  return (jsonb_build_object('accepted', v_reason is null, 'reason', v_reason) || public.get_player_summary(p_player_key)::jsonb)::json;
+  return (jsonb_build_object('accepted', v_reason is null, 'reason', v_reason) || public.get_player_summary(p_player_key, 'flow')::jsonb)::json;
 end $$;
 
--- --------------------------------------------------------------- leaderboards (Valley Score)
+-- --------------------------------------------------------------- leaderboards (p_game: 'dash' runner | 'flow' Valley Score)
 drop function if exists public.get_leaderboard(text, text, int);
-create or replace function public.get_leaderboard(p_period text default 'month', p_month text default null, p_limit int default 50)
+drop function if exists public.get_leaderboard(text, text, int, text);
+create or replace function public.get_leaderboard(p_period text default 'month', p_month text default null, p_limit int default 50, p_game text default 'dash')
 returns table (rank bigint, display_name text, company text, score bigint, levels bigint, achieved_at timestamptz)
 language sql stable security definer set search_path = public, private as $$
   select row_number() over (order by v.score desc, v.last_at asc), p.display_name, p.company, v.score, v.levels, v.last_at
-  from private.valley(case when p_period = 'all' then null else coalesce(p_month, private.current_month()) end) v
+  from private.standings(p_game, case when p_period = 'all' then null else coalesce(p_month, private.current_month()) end) v
   join public.players p on p.id = v.player_id
   order by v.score desc, v.last_at asc
   limit least(greatest(coalesce(p_limit, 50), 1), 200);
 $$;
 
-create or replace function public.get_company_board(p_period text default 'month', p_limit int default 25)
+drop function if exists public.get_company_board(text, int);
+drop function if exists public.get_company_board(text, int, text);
+create or replace function public.get_company_board(p_period text default 'month', p_limit int default 25, p_game text default 'dash')
 returns table (rank bigint, company text, total bigint, players bigint)
 language sql stable security definer set search_path = public, private as $$
   with ranked as (
     select lower(btrim(p.company)) ckey, p.company, v.score,
            row_number() over (partition by lower(btrim(p.company)) order by v.score desc) rn
-    from private.valley(case when p_period = 'all' then null else private.current_month() end) v
+    from private.standings(p_game, case when p_period = 'all' then null else private.current_month() end) v
     join public.players p on p.id = v.player_id
   ), agg as (
     select ckey, min(company) company, sum(score) filter (where rn <= 3) total, count(*) players from ranked group by ckey
@@ -240,7 +310,8 @@ language sql stable security definer set search_path = public, private as $$
 $$;
 
 drop function if exists public.get_monthly_winners(int);
-create or replace function public.get_monthly_winners(p_months int default 12)
+drop function if exists public.get_monthly_winners(int, text);
+create or replace function public.get_monthly_winners(p_months int default 12, p_game text default 'dash')
 returns table (month text, rank bigint, display_name text, company text, score bigint)
 language sql stable security definer set search_path = public, private as $$
   with months as (
@@ -249,7 +320,7 @@ language sql stable security definer set search_path = public, private as $$
       and r.month >= to_char((now() at time zone 'America/Chicago') - make_interval(months => greatest(p_months, 1)), 'YYYY-MM')
   ), ranked as (
     select m.month, v.player_id, v.score, row_number() over (partition by m.month order by v.score desc, v.last_at asc) rk
-    from months m cross join lateral private.valley(m.month) v
+    from months m cross join lateral private.standings(p_game, m.month) v
   )
   select k.month, k.rk, p.display_name, p.company, k.score
   from ranked k join public.players p on p.id = k.player_id
@@ -263,19 +334,32 @@ grant usage on schema public to anon, authenticated;
 grant execute on function
   public.register_player(text, text, text, boolean, boolean, text, text),
   public.start_run(uuid, text),
+  public.submit_run(uuid, uuid, int, int, int, int, int),
   public.submit_level(uuid, uuid, text, int, int, int),
-  public.get_player_summary(uuid),
-  public.get_leaderboard(text, text, int),
-  public.get_company_board(text, int),
-  public.get_monthly_winners(int)
+  public.get_player_summary(uuid, text),
+  public.get_leaderboard(text, text, int, text),
+  public.get_company_board(text, int, text),
+  public.get_monthly_winners(int, text)
 to anon, authenticated;
 
 -- --------------------------------------------------------------- admin views (dashboard / SQL editor only)
+-- Drip Dash runner: best run per player per month
+drop view if exists admin.dash_standings;
+create view admin.dash_standings as
+  select r.month, p.display_name, p.company, p.email, max(r.score) best_score, count(*) games,
+         min(r.submitted_at) first_run, max(r.submitted_at) last_run, p.is_blocked
+  from public.runs r join public.players p on p.id = r.player_id
+  where r.status = 'accepted' and r.level = 'RUN'
+  group by r.month, p.id
+  order by r.month desc, best_score desc;
+
+-- Bring Back the Flow: Valley Score per player per month
 drop view if exists admin.monthly_standings;
-create view admin.monthly_standings as
+drop view if exists admin.flow_standings;
+create view admin.flow_standings as
   with best as (
     select r.month, r.player_id, r.level, max(r.score) s, count(*) plays
-    from public.runs r where r.status = 'accepted' group by r.month, r.player_id, r.level
+    from public.runs r where r.status = 'accepted' and r.level <> 'RUN' group by r.month, r.player_id, r.level
   )
   select b.month, p.display_name, p.company, p.email, sum(b.s) valley_score, count(*) levels_completed,
          sum(b.plays) games, string_agg(b.level || ':' || b.s, '  ' order by b.level) per_level, p.is_blocked
@@ -286,14 +370,15 @@ create view admin.monthly_standings as
 drop view if exists admin.player_export;
 create view admin.player_export as
   select p.email, p.display_name, p.company, p.marketing_opt_in, p.source, p.created_at, p.last_seen_at,
-         (select sum(s) from (select max(score) s from public.runs r where r.player_id = p.id and r.status = 'accepted' group by r.level) x) valley_score_all_time,
-         (select count(distinct level) from public.runs r where r.player_id = p.id and r.status = 'accepted') levels_completed,
+         (select max(score) from public.runs r where r.player_id = p.id and r.status = 'accepted' and r.level = 'RUN') dash_best_score,
+         (select sum(s) from (select max(score) s from public.runs r where r.player_id = p.id and r.status = 'accepted' and r.level <> 'RUN' group by r.level) x) flow_valley_score,
+         (select count(distinct level) from public.runs r where r.player_id = p.id and r.status = 'accepted' and r.level <> 'RUN') flow_levels_completed,
          (select count(*) from public.runs r where r.player_id = p.id and r.status = 'accepted') games_played
   from public.players p order by p.created_at desc;
 
 drop view if exists admin.rejected_runs;
 create view admin.rejected_runs as
-  select r.submitted_at, p.display_name, p.company, p.email, r.level, r.score, r.stars, r.duration_ms, r.reject_reason
+  select r.submitted_at, p.display_name, p.company, p.email, r.level, r.score, r.stars, r.duration_ms, r.distance, r.drops, r.valves, r.reject_reason
   from public.runs r join public.players p on p.id = r.player_id
   where r.status = 'rejected' order by r.submitted_at desc;
 

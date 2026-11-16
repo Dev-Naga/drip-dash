@@ -16,10 +16,14 @@
   <div class="page-wrap">
     <header class="page-head">
       <a href="https://www.incontrolwatersystems.com" target="_blank" rel="noopener"><img src="assets/logo-incontrol.png" alt="inCon-trol Water Systems"></a>
-      <a class="btn primary" href="./">▶ Play Drip Dash</a>
+      <a class="btn primary" id="play-link" href="./">▶ Play</a>
     </header>
     <div class="card board-card" style="max-height:none">
-      <h1>🏆 Drip Dash Leaderboard</h1>
+      <h1>🏆 Leaderboard</h1>
+      <div class="tabs game-tabs" role="tablist" aria-label="Game">
+        <a role="tab" href="?game=dash" id="tab-dash">Drip Dash</a>
+        <a role="tab" href="?game=flow" id="tab-flow">Bring Back the Flow</a>
+      </div>
       <p class="muted small" id="mode-note"></p>
       <div id="board"></div>
     </div>
@@ -28,10 +32,16 @@
     import { mountBoard } from './js/board.js';
     import { LIVE } from './js/config.js';
     import { store } from './js/api.js';
-    document.getElementById('mode-note').textContent = LIVE
-      ? 'Valley Score = your best score on every level, added up. Monthly winners are confirmed by inCon-trol after the month closes.'
-      : 'DEMO MODE: the shared leaderboard is not connected yet, so this page shows sample data and scores from this browser only.';
-    const board = mountBoard(document.getElementById('board'), { me: store.get('dripdash.player') });
+    const game = new URLSearchParams(location.search).get('game') === 'flow' ? 'flow' : 'dash';
+    document.getElementById(`tab-${game}`).setAttribute('aria-selected', 'true');
+    document.getElementById(`tab-${game === 'flow' ? 'dash' : 'flow'}`).setAttribute('aria-selected', 'false');
+    document.getElementById('play-link').href = game === 'flow' ? 'flow/' : './';
+    document.getElementById('play-link').textContent = game === 'flow' ? '▶ Play Bring Back the Flow' : '▶ Play Drip Dash';
+    document.getElementById('mode-note').textContent = !LIVE
+      ? 'DEMO MODE: the shared leaderboard is not connected yet, so this page shows sample data and scores from this browser only.'
+      : game === 'flow' ? 'Valley Score = your best score on every level, added up. Monthly winners are confirmed by inCon-trol after the month closes.'
+      : 'Best single run per player. Monthly winners are confirmed by inCon-trol after the month closes.';
+    const board = mountBoard(document.getElementById('board'), { me: store.get('dripdash.player'), game });
     setInterval(() => document.visibilityState === 'visible' && board.refresh(), 60000);
   </script>
 </body>
