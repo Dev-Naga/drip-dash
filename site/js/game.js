@@ -148,6 +148,9 @@ export class Game {
     this.hooks = hooks;
     this.logo = new Image();
     this.logo.src = 'assets/logo-incontrol.png';
+    this.sprites = new Map();
+    // sprites that contain text must be re-rendered once the web fonts arrive
+    document.fonts?.ready.then(() => this.sprites.clear());
     this.state = 'ready';
     this.seenHints = new Set(store.get('dripdash.hints', []));
     this.time = 0;
@@ -172,6 +175,7 @@ export class Game {
     let s = Math.min(cw / MIN_W, ch / (BAND_BOT - BAND_TOP), Math.max(cw / 900, ch / WORLD_H));
     if (cw / s > MAX_W) s = cw / MAX_W;
     this.scale = s; this.dpr = dpr;
+    this.sprites?.clear();
     this.cssW = cw; this.cssH = ch;
     this.W = cw / s;
     const centre = ch > cw ? 0.46 : 0.5;
@@ -259,8 +263,11 @@ export class Game {
     this.last = ts;
     this.time += dt;
     if (this.state === 'playing') {
-      this.acc += dt;
-      while (this.acc >= STEP) { this.update(STEP); this.acc -= STEP; if (this.state !== 'playing') break; }
+      // Advance exactly this frame's elapsed time, split into equal sub-steps of ≤ STEP.
+      // (A fixed-step accumulator gives uneven 1-or-2-step frames on 75/90/144 Hz screens,
+      // which reads as stutter/blur and gets worse as the world scrolls faster.)
+      const n = Math.max(1, Math.ceil(dt / STEP - 1e-6));
+      for (let i = 0; i < n && this.state === 'playing'; i++) this.update(dt / n);
       this.playMs += dt * 1000;
     } else if (this.state === 'dying') {
       this.updateDying(dt);
@@ -617,7 +624,8 @@ export class Game {
       ctx.globalAlpha = a;
       ctx.font = `700 ${f.size}px "Barlow Condensed", "Arial Narrow", sans-serif`;
       ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(0,40,80,.75)';
-      ctx.strokeText(f.text, f.x, f.y); ctx.fillStyle = f.color; ctx.fillText(f.text, f.x, f.y);
+      const fx = this.snapX(f.x), fy = this.snapY(f.y);
+      ctx.strokeText(f.text, fx, fy); ctx.fillStyle = f.color; ctx.fillText(f.text, fx, fy);
       ctx.globalAlpha = 1;
     }
     // flash
@@ -632,24 +640,27 @@ export class Game {
     const ctx = this.ctx, s = this.scale * this.dpr;
     // HUD in screen space so it hugs the canvas edges
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-    const u = clamp(this.scale, 0.6, 1.3);
-    const pad = 12 * u;
+    // whole-pixel layout so HUD text and boxes stay crisp
+    const u = Math.round(clamp(this.scale, 0.6, 1.3) * 20) / 20;
+    const pad = Math.round(12 * u);
+    const fillText = ctx.fillText.bind(ctx);
+    const txt = (t, x, y) => fillText(t, Math.round(x * this.dpr) / this.dpr, Math.round(y * this.dpr) / this.dpr);
     ctx.textAlign = 'left'; ctx.textBaseline = 'top';
     ctx.fillStyle = 'rgba(0,40,80,.55)';
     roundRect(ctx, pad, pad, 168 * u, 56 * u, 12 * u); ctx.fill();
     ctx.fillStyle = '#fff';
     ctx.font = `700 ${30 * u}px "Barlow Condensed", "Arial Narrow", sans-serif`;
-    ctx.fillText(this.score.toLocaleString(), pad + 12 * u, pad + 4 * u);
+    txt(this.score.toLocaleString(), pad + 12 * u, pad + 4 * u);
     ctx.font = `600 ${13 * u}px "Barlow Condensed", "Arial Narrow", sans-serif`;
     ctx.fillStyle = BRAND.blue30;
-    ctx.fillText(`${this.distance} m  ·  ${this.drops} drops`, pad + 12 * u, pad + 37 * u);
+    txt(`${this.distance} m  ·  ${this.drops} drops`, pad + 12 * u, pad + 37 * u);
 
     // combo + powers on the right of the score box
     let x = pad + 178 * u;
     if (this.multiplier > 1) {
       ctx.fillStyle = BRAND.aqua; roundRect(ctx, x, pad, 58 * u, 26 * u, 8 * u); ctx.fill();
       ctx.fillStyle = BRAND.deep; ctx.font = `700 ${18 * u}px "Barlow Condensed", sans-serif`;
-      ctx.fillText(`x${this.multiplier}`, x + 10 * u, pad + 3 * u); x += 66 * u;
+      txt(`x${this.multiplier}`, x + 10 * u, pad + 3 * u); x += 66 * u;
     }
     const pw = [];
     if (this.power.shield) pw.push(['shield', 1, 'Shield']);
@@ -659,7 +670,7 @@ export class Game {
       ctx.fillStyle = 'rgba(0,40,80,.55)'; roundRect(ctx, x, pad, 70 * u, 26 * u, 8 * u); ctx.fill();
       ctx.save(); ctx.translate(x + 13 * u, pad + 13 * u); ctx.scale(u * 0.55, u * 0.55); this.drawPowerIcon(k, 0, 0); ctx.restore();
       ctx.fillStyle = '#fff'; ctx.font = `600 ${13 * u}px "Barlow Condensed", sans-serif`;
-      ctx.fillText(label, x + 28 * u, pad + 6 * u);
+      txt(label, x + 28 * u, pad + 6 * u);
       ctx.fillStyle = BRAND.aqua; ctx.fillRect(x + 6 * u, pad + 22 * u, 58 * u * clamp(f, 0, 1), 2.5 * u);
       x += 76 * u;
     }
@@ -668,7 +679,8 @@ export class Game {
 
   drawHint({ o, text }) {
     const ctx = this.ctx;
-    const x = clamp(o.x + o.w / 2, 120, this.W - 120), y = o.type === 'lowpipe' ? G - 150 : G - Math.max(o.h, 60) - 70;
+    const x = this.snapX(clamp(o.x + o.w / 2, 120, this.W - 120));
+    const y = this.snapY(o.type === 'lowpipe' ? G - 150 : G - Math.max(o.h, 60) - 70);
     ctx.font = '700 17px "Barlow Condensed", "Arial Narrow", sans-serif';
     const w = ctx.measureText(text).width + 24;
     ctx.fillStyle = 'rgba(0,58,102,.88)';
@@ -837,18 +849,52 @@ export class Game {
     ctx.fillStyle = g; ctx.fillRect(-2, this.viewTop, this.W + 4, G - this.viewTop + 2);
   }
 
+  // ---- crisp sprites: detailed art is rendered once at the screen's real pixel density,
+  // then copied onto whole device pixels so it stays sharp while scrolling fast.
+  sprite(key, w, h, pad, draw) {
+    const S = this.scale * this.dpr;
+    const k = `${key}@${S.toFixed(3)}`;
+    let c = this.sprites.get(k);
+    if (!c) {
+      c = document.createElement('canvas');
+      c.width = Math.ceil((w + pad * 2) * S); c.height = Math.ceil((h + pad * 2) * S);
+      const g = c.getContext('2d');
+      g.imageSmoothingQuality = 'high';
+      g.scale(S, S); g.translate(pad, pad);
+      draw(g);
+      c.pad = pad;
+      this.sprites.set(k, c);
+    }
+    return c;
+  }
+  blit(c, x, y) {
+    const ctx = this.ctx, m = ctx.getTransform();
+    const S = this.scale * this.dpr;
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(c, Math.round(m.a * (x - c.pad) + m.e), Math.round(m.d * (y - c.pad) + m.f));
+    ctx.restore();
+    return S;
+  }
+  logoReady() { return this.logo.complete && this.logo.naturalWidth > 0; }
+  // Snap a world coordinate so text lands on a whole device pixel.
+  snapX(x) { const m = this.ctx.getTransform(); return (Math.round(m.a * x + m.e) - m.e) / m.a; }
+  snapY(y) { const m = this.ctx.getTransform(); return (Math.round(m.d * y + m.f) - m.f) / m.d; }
+
   billboard(x, y, w, h, dark = false) {
     const ctx = this.ctx;
     ctx.fillStyle = '#59636e'; ctx.fillRect(x + w * 0.2, y + h, 6, G - y - h); ctx.fillRect(x + w * 0.8 - 6, y + h, 6, G - y - h);
-    ctx.fillStyle = dark ? '#eef4f8' : '#fff';
-    ctx.strokeStyle = BRAND.blue; ctx.lineWidth = 3;
-    roundRect(ctx, x, y, w, h, 6); ctx.fill(); ctx.stroke();
-    if (this.logo.complete && this.logo.naturalWidth) {
+    if (!this.logoReady()) return;
+    const face = this.sprite(`board${w}x${h}${dark ? 'd' : ''}`, w, h, 3, (g) => {
+      g.fillStyle = dark ? '#eef4f8' : '#fff';
+      g.strokeStyle = BRAND.blue; g.lineWidth = 3;
+      roundRect(g, 0, 0, w, h, 6); g.fill(); g.stroke();
       const lw = w - 20, lh = lw * this.logo.naturalHeight / this.logo.naturalWidth;
-      ctx.drawImage(this.logo, x + 10, y + 6, lw, lh);
-      ctx.fillStyle = BRAND.blue; ctx.font = 'italic 700 12px "Zilla Slab", Georgia, serif'; ctx.textAlign = 'center';
-      ctx.fillText('Creating Smart Water Solutions', x + w / 2, y + h - 8);
-    }
+      g.drawImage(this.logo, 10, 6, lw, lh);
+      g.fillStyle = BRAND.blue; g.font = 'italic 700 12px "Zilla Slab", Georgia, serif'; g.textAlign = 'center';
+      g.fillText('Creating Smart Water Solutions', w / 2, h - 8);
+    });
+    this.blit(face, x, y);
   }
 
   groundBase(top, fill) {
@@ -919,19 +965,25 @@ export class Game {
     this.tiles(0.5, 240, (x, i) => {
       if (i % 4 === 1) {
         // control panel with logo plate
-        ctx.fillStyle = '#c9d1d8'; roundRect(ctx, x + 20, G - 200, 120, 196, 6); ctx.fill();
-        ctx.strokeStyle = '#8c969f'; ctx.lineWidth = 2; ctx.strokeRect(x + 30, G - 190, 100, 176);
-        ctx.fillStyle = '#fff'; ctx.fillRect(x + 36, G - 182, 88, 36);
-        if (this.logo.complete && this.logo.naturalWidth) ctx.drawImage(this.logo, x + 38, G - 180, 84, 84 * this.logo.naturalHeight / this.logo.naturalWidth);
+        if (this.logoReady()) {
+          const panel = this.sprite('panel', 120, 196, 2, (g) => {
+            g.fillStyle = '#c9d1d8'; roundRect(g, 0, 0, 120, 196, 6); g.fill();
+            g.strokeStyle = '#8c969f'; g.lineWidth = 2; g.strokeRect(10, 10, 100, 176);
+            g.fillStyle = '#fff'; g.fillRect(16, 18, 88, 36);
+            g.drawImage(this.logo, 18, 20, 84, 84 * this.logo.naturalHeight / this.logo.naturalWidth);
+            g.fillStyle = '#1d2833'; g.fillRect(22, 90, 76, 30);
+            g.fillStyle = '#7d8790'; g.font = '600 10px "Barlow Condensed", sans-serif'; g.fillText('UL 508A', 28, 140);
+          });
+          this.blit(panel, x + 20, G - 200);
+        }
+        x = this.snapX(x);
         for (let k = 0; k < 3; k++) {
           const on = Math.sin(this.time * 3 + k * 2 + i) > 0;
           ctx.fillStyle = on ? ['#3ddc84', '#ffcc33', '#ff5a4f'][k] : '#55606a';
           ctx.beginPath(); ctx.arc(x + 52 + k * 28, G - 128, 7, 0, Math.PI * 2); ctx.fill();
         }
-        ctx.fillStyle = '#1d2833'; ctx.fillRect(x + 42, G - 110, 76, 30);
         ctx.fillStyle = '#3ddc84'; ctx.font = '600 13px "Barlow Condensed", monospace'; ctx.textAlign = 'left';
-        ctx.fillText(`${(60 + Math.sin(this.time + i) * 4).toFixed(1)} PSI`, x + 48, G - 90);
-        ctx.fillStyle = '#7d8790'; ctx.font = '600 10px "Barlow Condensed", sans-serif'; ctx.fillText('UL 508A', x + 48, G - 60);
+        ctx.fillText(`${(60 + Math.sin(this.time + i) * 4).toFixed(1)} PSI`, x + 48, this.snapY(G - 90));
       } else {
         // vertical pump + motor
         const px = x + 80;
