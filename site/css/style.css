@@ -201,3 +201,41 @@ canvas.mascot { width: 92px; height: auto; display: block; margin: 4px auto 0; }
 .over-ach { min-height: 0; margin: 0 0 6px; color: var(--deep); font-weight: 600; }
 .over-ach:empty { display: none; }
 .ach-list .ach-ic { font-size: 24px; }
+
+/* ---------------- Water Run */
+.run-page #stage { background: #8fd3f4; }
+.run-page #screen-title { background: linear-gradient(rgba(0,38,72,.05), rgba(0,38,72,.35)); }
+.title-card { position: relative; }
+.game-back { position: absolute; left: 14px; top: 10px; font-weight: 700; color: var(--blue60); text-decoration: none; font-size: 15px; }
+.game-back:hover { text-decoration: underline; }
+.kicker { margin: 4px 0 -4px; font-weight: 700; letter-spacing: 3px; text-transform: uppercase; color: var(--aqua); font-size: 15px; }
+.zone-list { font-size: 14px; color: var(--muted); margin: 12px 0 0; line-height: 1.35; }
+.zone-list b { color: var(--deep); }
+#run-hud { position: absolute; left: 10px; top: max(10px, env(safe-area-inset-top)); z-index: 2; display: flex; flex-direction: column; gap: 6px; pointer-events: none; }
+.rh-score { background: rgba(0,40,80,.55); color: #fff; border-radius: 14px; padding: 6px 14px 8px; min-width: 140px; }
+.rh-score b { display: block; font-size: 34px; line-height: 1; font-weight: 700; }
+.rh-score span { color: #CFF6FF; font-weight: 600; font-size: 16px; }
+.rh-drops { background: rgba(0,40,80,.55); color: #fff; border-radius: 12px; padding: 4px 12px; font-weight: 700; font-size: 18px; align-self: flex-start; }
+#h-mult { background: #7ed957; color: var(--ink); border-radius: 6px; padding: 0 6px; margin-left: 4px; }
+.rh-powers { display: flex; flex-direction: column; gap: 4px; }
+.pw { background: rgba(0,40,80,.6); color: #fff; border-radius: 10px; padding: 3px 10px; font-weight: 700; font-size: 16px; align-self: flex-start; border-left: 4px solid var(--aqua); }
+.pw.magnet { border-color: #ff5a5a; } .pw.mult { border-color: #7ed957; } .pw.boost { border-color: #ffc845; } .pw.warn { border-color: #ff4d5e; background: rgba(160,20,30,.7); }
+#zone-banner { position: absolute; left: 50%; top: 16%; transform: translateX(-50%); z-index: 3; text-align: center; color: #fff; pointer-events: none; text-shadow: 0 2px 8px rgba(0,30,60,.7); }
+#zone-banner small { display: block; font-weight: 700; letter-spacing: 3px; text-transform: uppercase; font-size: 14px; color: #CFF6FF; }
+#zone-banner b { display: block; font-family: var(--display); font-size: clamp(34px, 7vw, 56px); line-height: 1; }
+#zone-banner span { display: block; font-weight: 600; font-size: 17px; margin-top: 4px; }
+#zone-banner.go { animation: zb 3.2s ease-out forwards; }
+@keyframes zb { 0% { opacity: 0; transform: translate(-50%, 12px); } 12%, 75% { opacity: 1; transform: translate(-50%, 0); } 100% { opacity: 0; } }
+#countdown { position: absolute; inset: 0; display: grid; place-items: center; font-family: var(--display); font-size: 120px; color: #fff; text-shadow: 0 4px 0 var(--deep), 0 8px 24px rgba(0,0,0,.3); pointer-events: none; z-index: 3; }
+#pop { position: absolute; left: 50%; top: 30%; transform: translateX(-50%); z-index: 3; background: rgba(255,200,69,.95); color: var(--ink); font-weight: 700; font-size: 20px; padding: 6px 16px; border-radius: 999px; pointer-events: none; white-space: nowrap; }
+#pop.go { animation: popup 1.6s ease-out forwards; }
+@keyframes popup { 0% { opacity: 0; transform: translate(-50%, 10px) scale(.9); } 15%, 70% { opacity: 1; transform: translate(-50%, 0) scale(1); } 100% { opacity: 0; transform: translate(-50%, -14px); } }
+.zones-reached { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin: 0 0 8px; }
+.zones-reached small { width: 100%; color: var(--muted); font-weight: 600; }
+.zones-reached span { background: var(--mist); color: var(--muted); border-radius: 999px; padding: 3px 10px; font-weight: 600; font-size: 14px; }
+.zones-reached span.on { background: var(--aqua); color: var(--ink); }
+.more-game.featured { background: linear-gradient(120deg, #00a0c8, var(--blue)); box-shadow: 0 0 0 3px var(--aqua), 0 10px 24px rgba(0,86,149,.35); }
+.more-game.featured .mg-new { background: #ffc845; color: var(--ink); }
+@media (prefers-reduced-motion: reduce) { #zone-banner.go, #pop.go { animation-duration: .01s; animation-iteration-count: 1; } #zone-banner.go { animation: none; } #pop.go { animation: none; } }
+.game-back + .brand { margin-top: 18px; }
+#zone-banner { background: rgba(0,40,80,.6); border-radius: 18px; padding: 10px 22px 12px; max-width: calc(100vw - 32px); }

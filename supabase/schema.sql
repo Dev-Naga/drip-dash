@@ -2,12 +2,14 @@
 -- Drip Dash games — Supabase schema (run once in Supabase → SQL Editor)
 -- Safe to re-run: functions are replaced, tables/columns created if missing.
 --
--- Three games share one backend (players register once, play all):
+-- Four games share one backend (players register once, play all):
 --   * 'dash' — Drip Dash, the endless runner (the main game). Runs use level 'RUN'.
 --     Leaderboard = each player's best single run in the period.
 --   * 'flow' — Bring Back the Flow, the 7-level story game. Runs use levels L1…L7.
 --     Leaderboard = VALLEY SCORE, the sum of a player's best score on each level.
 --   * 'splash' — Splash Escape, the splash-pad survival arena. Runs use level 'SPLASH'.
+--     Leaderboard = each player's best single run in the period.
+--   * 'wrun' — Drip Dash: Water Run, the 3D three-lane runner. Runs use level 'WRUN'.
 --     Leaderboard = each player's best single run in the period.
 --   * Monthly boards = runs this calendar month (US Central); all-time = every run.
 --
@@ -74,6 +76,7 @@ create table if not exists private.levels (
 insert into private.levels (id, title, max_score, min_ms) values
   ('RUN', 'Drip Dash (runner)', 1000000, 1000),   -- runner runs are checked by submit_run
   ('SPLASH', 'Splash Escape', 1000000, 3000),      -- splash runs are checked by submit_splash
+  ('WRUN', 'Water Run', 1000000, 1000),            -- Water Run runs are checked by submit_water_run
   ('L1', 'Wake the Water',      7000, 15000),
   ('L2', 'The Pressure Dance',  6500, 55000),
   ('L3', 'Before Sunrise',      7500, 20000),
@@ -107,13 +110,13 @@ language sql stable as $$
   with best as (
     select r.player_id, r.level, max(r.score) s, max(r.submitted_at) at
     from public.runs r join public.players p on p.id = r.player_id
-    where r.status = 'accepted' and not p.is_blocked and r.level not in ('RUN', 'SPLASH') and (p_month is null or r.month = p_month)
+    where r.status = 'accepted' and not p.is_blocked and r.level not in ('RUN', 'SPLASH', 'WRUN') and (p_month is null or r.month = p_month)
     group by r.player_id, r.level
   )
   select player_id, sum(s)::bigint, count(*)::bigint, max(at) from best group by player_id
 $$;
 
--- Single-run games (runner 'RUN', Splash Escape 'SPLASH'): each player's best run (earliest wins ties).
+-- Single-run games (runner 'RUN', Splash Escape 'SPLASH', Water Run 'WRUN'): each player's best run (earliest wins ties).
 create or replace function private.best_run(p_level text, p_month text)
 returns table (player_id uuid, score bigint, levels bigint, last_at timestamptz)
 language sql stable as $$
@@ -126,9 +129,11 @@ $$;
 create or replace function private.standings(p_game text, p_month text)
 returns table (player_id uuid, score bigint, levels bigint, last_at timestamptz)
 language sql stable as $$
-  select * from private.best_run('RUN', p_month) where coalesce(p_game, 'dash') not in ('flow', 'splash')
+  select * from private.best_run('RUN', p_month) where coalesce(p_game, 'dash') not in ('flow', 'splash', 'wrun')
   union all
   select * from private.best_run('SPLASH', p_month) where p_game = 'splash'
+  union all
+  select * from private.best_run('WRUN', p_month) where p_game = 'wrun'
   union all
   select * from private.valley(p_month) where p_game = 'flow'
 $$;
@@ -268,7 +273,7 @@ begin
   select * into v_lv from private.levels where id = v_run.level;
 
   v_elapsed := extract(epoch from (now() - v_run.started_at)) * 1000;
-  if v_run.level is distinct from p_level or p_level in ('RUN', 'SPLASH') then v_reason := 'ticket is for a different level';
+  if v_run.level is distinct from p_level or p_level in ('RUN', 'SPLASH', 'WRUN') then v_reason := 'ticket is for a different level';
   elsif v_elapsed > 3 * 3600 * 1000 then v_reason := 'ticket expired';
   elsif p_score is null or p_score < 0 or p_score > v_lv.max_score then v_reason := 'score above level maximum';
   elsif p_stars is null or p_stars not between 1 and 3 then v_reason := 'invalid stars';
@@ -322,6 +327,50 @@ begin
   where id = p_run_id;
   update public.players set last_seen_at = now() where id = v_pid;
   return (jsonb_build_object('accepted', v_reason is null, 'reason', v_reason) || public.get_player_summary(p_player_key, 'splash')::jsonb)::json;
+end $$;
+
+-- --------------------------------------------------------------- submit_water_run — Drip Dash: Water Run (plausibility checks)
+-- Game facts used for bounds (keep in sync with RULES in site/js/run-game.js):
+--   top speed 30 m/s, x1.5 during Jet Boost = 45 m/s; a drop is worth at most 10 x 2 (Flow Meter) = 20;
+--   a golden valve at most 100 x 2 = 200; a power-up pickup 25. Drops: at most 5 per obstacle row,
+--   rows at least 0.62 s apart; valves at least 6 s apart; power-ups at least 10 s apart.
+create or replace function public.submit_water_run(
+  p_run_id uuid, p_player_key uuid, p_score int, p_duration_ms int,
+  p_distance int, p_drops int, p_valves int, p_powerups int
+) returns json
+language plpgsql security definer set search_path = public, private as $$
+declare v_run public.runs; v_pid uuid; v_blocked boolean; v_elapsed_ms numeric; v_reason text := null; v_secs numeric;
+begin
+  select id, is_blocked into v_pid, v_blocked from public.players where player_key = p_player_key;
+  if v_pid is null then raise exception 'Unknown player. Please register again.'; end if;
+  if v_blocked then raise exception 'This account is not eligible.'; end if;
+
+  select * into v_run from public.runs where id = p_run_id for update;
+  if not found then raise exception 'Unknown game ticket.'; end if;
+  if v_run.status <> 'started' then raise exception 'This game was already submitted.'; end if;
+  if v_run.player_id is not null and v_run.player_id <> v_pid then raise exception 'Ticket belongs to another player.'; end if;
+
+  v_elapsed_ms := extract(epoch from (now() - v_run.started_at)) * 1000;
+  v_secs := greatest(coalesce(p_duration_ms, 0), 0) / 1000.0;
+  if v_run.level is distinct from 'WRUN' then v_reason := 'ticket is not for Water Run';
+  elsif v_elapsed_ms > 3 * 3600 * 1000 then v_reason := 'ticket expired';
+  elsif p_score is null or p_score < 0 or p_score > 1000000 then v_reason := 'invalid score';
+  elsif p_duration_ms is null or p_duration_ms < 1000 then v_reason := 'run too short';
+  elsif p_duration_ms > v_elapsed_ms + 3000 then v_reason := 'run longer than server clock';
+  elsif p_distance is null or p_distance < 0 or p_distance > v_secs * 46 + 30 then v_reason := 'distance not possible in that time';
+  elsif p_drops is null or p_drops < 0 or p_drops > v_secs * 9 + 10 then v_reason := 'too many drops for run time';
+  elsif p_valves is null or p_valves < 0 or p_valves > v_secs / 5 + 3 then v_reason := 'too many valves for run time';
+  elsif p_powerups is null or p_powerups < 0 or p_powerups > v_secs / 9 + 2 then v_reason := 'too many power-ups for run time';
+  elsif p_score < p_distance then v_reason := 'score lower than distance';
+  elsif p_score > p_distance + p_drops * 20 + p_valves * 200 + p_powerups * 25 + 10 then v_reason := 'score exceeds possible bonus';
+  end if;
+
+  update public.runs set player_id = v_pid, submitted_at = now(), score = p_score, duration_ms = p_duration_ms,
+    distance = p_distance, drops = p_drops, valves = p_valves, stars = least(p_powerups, 32000), month = private.current_month(),
+    status = case when v_reason is null then 'accepted' else 'rejected' end, reject_reason = v_reason
+  where id = p_run_id;
+  update public.players set last_seen_at = now() where id = v_pid;
+  return (jsonb_build_object('accepted', v_reason is null, 'reason', v_reason) || public.get_player_summary(p_player_key, 'wrun')::jsonb)::json;
 end $$;
 
 -- --------------------------------------------------------------- leaderboards (p_game: 'dash' runner | 'flow' Valley Score | 'splash' Splash Escape)
@@ -382,6 +431,7 @@ grant execute on function
   public.submit_run(uuid, uuid, int, int, int, int, int),
   public.submit_level(uuid, uuid, text, int, int, int),
   public.submit_splash(uuid, uuid, int, int, int, int),
+  public.submit_water_run(uuid, uuid, int, int, int, int, int, int),
   public.get_player_summary(uuid, text),
   public.get_leaderboard(text, text, int, text),
   public.get_company_board(text, int, text),
@@ -409,13 +459,23 @@ create view admin.splash_standings as
   group by r.month, p.id
   order by r.month desc, best_score desc;
 
+-- Water Run: best run per player per month (stars = power-ups collected)
+drop view if exists admin.water_run_standings;
+create view admin.water_run_standings as
+  select r.month, p.display_name, p.company, p.email, max(r.score) best_score, max(r.distance) longest_m,
+         count(*) games, min(r.submitted_at) first_run, max(r.submitted_at) last_run, p.is_blocked
+  from public.runs r join public.players p on p.id = r.player_id
+  where r.status = 'accepted' and r.level = 'WRUN'
+  group by r.month, p.id
+  order by r.month desc, best_score desc;
+
 -- Bring Back the Flow: Valley Score per player per month
 drop view if exists admin.monthly_standings;
 drop view if exists admin.flow_standings;
 create view admin.flow_standings as
   with best as (
     select r.month, r.player_id, r.level, max(r.score) s, count(*) plays
-    from public.runs r where r.status = 'accepted' and r.level not in ('RUN', 'SPLASH') group by r.month, r.player_id, r.level
+    from public.runs r where r.status = 'accepted' and r.level not in ('RUN', 'SPLASH', 'WRUN') group by r.month, r.player_id, r.level
   )
   select b.month, p.display_name, p.company, p.email, sum(b.s) valley_score, count(*) levels_completed,
          sum(b.plays) games, string_agg(b.level || ':' || b.s, '  ' order by b.level) per_level, p.is_blocked
@@ -428,8 +488,9 @@ create view admin.player_export as
   select p.email, p.display_name, p.company, p.marketing_opt_in, p.source, p.created_at, p.last_seen_at,
          (select max(score) from public.runs r where r.player_id = p.id and r.status = 'accepted' and r.level = 'RUN') dash_best_score,
          (select max(score) from public.runs r where r.player_id = p.id and r.status = 'accepted' and r.level = 'SPLASH') splash_best_score,
-         (select sum(s) from (select max(score) s from public.runs r where r.player_id = p.id and r.status = 'accepted' and r.level not in ('RUN', 'SPLASH') group by r.level) x) flow_valley_score,
-         (select count(distinct level) from public.runs r where r.player_id = p.id and r.status = 'accepted' and r.level not in ('RUN', 'SPLASH')) flow_levels_completed,
+         (select max(score) from public.runs r where r.player_id = p.id and r.status = 'accepted' and r.level = 'WRUN') water_run_best_score,
+         (select sum(s) from (select max(score) s from public.runs r where r.player_id = p.id and r.status = 'accepted' and r.level not in ('RUN', 'SPLASH', 'WRUN') group by r.level) x) flow_valley_score,
+         (select count(distinct level) from public.runs r where r.player_id = p.id and r.status = 'accepted' and r.level not in ('RUN', 'SPLASH', 'WRUN')) flow_levels_completed,
          (select count(*) from public.runs r where r.player_id = p.id and r.status = 'accepted') games_played
   from public.players p order by p.created_at desc;
 

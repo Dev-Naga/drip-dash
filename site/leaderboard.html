@@ -22,6 +22,7 @@
       <h1>🏆 Leaderboard</h1>
       <div class="tabs game-tabs" role="tablist" aria-label="Game">
         <a role="tab" href="?game=dash" id="tab-dash">Drip Dash</a>
+        <a role="tab" href="?game=wrun" id="tab-wrun">Water Run</a>
         <a role="tab" href="?game=flow" id="tab-flow">Bring Back the Flow</a>
         <a role="tab" href="?game=splash" id="tab-splash">Splash Escape</a>
       </div>
@@ -33,7 +34,7 @@
     import { mountBoard } from './js/board.js';
     import { LIVE } from './js/config.js';
     import { store } from './js/api.js';
-    const GAMES = { dash: ['./', 'Drip Dash'], flow: ['flow/', 'Bring Back the Flow'], splash: ['splash/', 'Splash Escape'] };
+    const GAMES = { dash: ['./', 'Drip Dash'], wrun: ['run/', 'Water Run'], flow: ['flow/', 'Bring Back the Flow'], splash: ['splash/', 'Splash Escape'] };
     const q = new URLSearchParams(location.search).get('game');
     const game = GAMES[q] ? q : 'dash';
     for (const g of Object.keys(GAMES)) document.getElementById(`tab-${g}`).setAttribute('aria-selected', String(g === game));
@@ -42,6 +43,7 @@
     document.getElementById('mode-note').textContent = !LIVE
       ? 'DEMO MODE: the shared leaderboard is not connected yet, so this page shows sample data and scores from this browser only.'
       : game === 'flow' ? 'Valley Score = your best score on every level, added up. Monthly winners are confirmed by inCon-trol after the month closes.'
+      : game === 'wrun' ? 'Best single run per player (1 point per metre, plus drops, golden valves and power-ups). Monthly winners are confirmed by inCon-trol after the month closes.'
       : game === 'splash' ? 'Best single run per player (10 points per second survived, plus golden drops and power-ups). Monthly winners are confirmed by inCon-trol after the month closes.'
       : 'Best single run per player. Monthly winners are confirmed by inCon-trol after the month closes.';
     const board = mountBoard(document.getElementById('board'), { me: store.get('dripdash.player'), game });

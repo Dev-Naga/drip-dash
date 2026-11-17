@@ -39,11 +39,12 @@ async function rpc(fn, args = {}) {
   return data;
 }
 
-// Three games share one backend:
+// Four games share one backend:
 //   'dash'   = Drip Dash runner (level 'RUN'): leaderboard = each player's best single run.
 //   'flow'   = Bring Back the Flow (levels L1…): leaderboard = Valley Score (best per level, summed).
 //   'splash' = Splash Escape (level 'SPLASH'): leaderboard = each player's best single run.
-const GAME_OF = (level) => (level === 'RUN' ? 'dash' : level === 'SPLASH' ? 'splash' : 'flow');
+//   'wrun'   = Drip Dash: Water Run (level 'WRUN'): leaderboard = each player's best single run.
+const GAME_OF = (level) => ({ RUN: 'dash', SPLASH: 'splash', WRUN: 'wrun' }[level] || 'flow');
 const live = {
   mode: 'live',
   register: (p) => rpc('register_player', {
@@ -51,7 +52,9 @@ const live = {
     p_consent: !!p.consent, p_opt_in: !!p.optIn, p_source: p.source || null, p_hp: p.hp || '',
   }),
   startRun: (playerKey, level = 'RUN') => rpc('start_run', { p_player_key: playerKey || null, p_level: level }),
-  submitRun: (r) => (r.level === 'SPLASH'
+  submitRun: (r) => (r.level === 'WRUN'
+    ? rpc('submit_water_run', { p_run_id: r.runId, p_player_key: r.playerKey, p_score: r.score, p_duration_ms: r.durationMs, p_distance: r.distance, p_drops: r.drops, p_valves: r.valves, p_powerups: r.powerups })
+    : r.level === 'SPLASH'
     ? rpc('submit_splash', { p_run_id: r.runId, p_player_key: r.playerKey, p_score: r.score, p_duration_ms: r.durationMs, p_drops: r.drops, p_powerups: r.powerups })
     : r.level && r.level !== 'RUN'
     ? rpc('submit_level', { p_run_id: r.runId, p_player_key: r.playerKey, p_level: r.level, p_score: r.score, p_duration_ms: r.durationMs, p_stars: r.stars })
@@ -63,7 +66,7 @@ const live = {
 };
 
 // ---------------------------------------------------------------- DEMO (this browser only) — mirrors the server rules
-const DEMO_KEY = 'dripdash.demo.v4';
+const DEMO_KEY = 'dripdash.demo.v5';
 function demoDb() {
   let db = LS.get(DEMO_KEY);
   if (!db) {
@@ -77,6 +80,8 @@ function demoDb() {
       db.runs.push({ key, level: 'RUN', score: Math.round(dash * 0.8), month: '2026-10', at: now - 40 * 86400e3 });
       db.runs.push({ key, level: 'SPLASH', score: 600 + ((i * 5 + 3) % 6) * 210, month: m, at: now - i * 5400e3 });
       db.runs.push({ key, level: 'SPLASH', score: 500 + i * 90, month: '2026-10', at: now - 41 * 86400e3 });
+      db.runs.push({ key, level: 'WRUN', score: 900 + ((i * 3 + 1) % 5) * 520, month: m, at: now - i * 4000e3 });
+      db.runs.push({ key, level: 'WRUN', score: 700 + i * 150, month: '2026-10', at: now - 42 * 86400e3 });
       for (let l = 1; l <= levels; l++) {
         db.runs.push({ key, level: `L${l}`, score: 3600 + ((i * 7 + l * 13) % 10) * 120, month: m, at: now - (i * 5 + l) * 3600e3 });
         db.runs.push({ key, level: `L${l}`, score: 3000 + l * 100, month: '2026-10', at: now - 40 * 86400e3 });

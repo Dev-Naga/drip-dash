@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <title>Water Run | Drip Dash by inCon-trol Water Systems</title>
+  <meta name="description" content="A 3D three-lane runner through splash parks, cascade plazas, koi courts, city bridges and fountain shows inspired by real inCon-trol projects.">
+  <meta name="theme-color" content="#005695">
+  <meta property="og:title" content="Drip Dash: Water Run by inCon-trol Water Systems">
+  <meta property="og:description" content="Dash, jump and slide through real-world inCon-trol water features. Top this month's leaderboard!">
+  <meta property="og:image" content="../assets/og-card.jpg">
+  <link rel="icon" href="../assets/drip-mascot.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Zilla+Slab:ital,wght@0,700;1,700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/style.css">
+  <script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.min.js" } }</script>
+</head>
+<body class="game-page run-page">
+  <main id="stage">
+    <canvas id="game" aria-label="Water Run. Left and right arrows or swipe to change lanes, up or swipe up to jump, down or swipe down to slide."></canvas>
+
+    <div id="run-hud" hidden>
+      <div class="rh-score"><b id="h-score">0</b><span id="h-dist">0 m</span></div>
+      <div class="rh-drops">💧 <b id="h-drops">0</b> <span id="h-mult" hidden>x2</span></div>
+      <div class="rh-powers" id="h-powers"></div>
+    </div>
+    <div id="zone-banner" hidden><small>Now entering</small><b id="zb-name"></b><span id="zb-ref"></span></div>
+    <div id="countdown" hidden></div>
+    <div id="pop" hidden></div>
+
+    <div id="hud-buttons" hidden>
+      <button id="btn-pause" class="icon-btn" aria-label="Pause">❚❚</button>
+      <button id="btn-mute" class="icon-btn" aria-label="Mute sound">🔊</button>
+    </div>
+    <div id="demo-badge" hidden title="Scores are saved only in this browser until the shared leaderboard is connected.">DEMO MODE · local scores only</div>
+
+    <!-- TITLE -->
+    <section id="screen-title" class="screen" aria-label="Title">
+      <div class="card title-card">
+        <a class="game-back" href="../">← Drip Dash games</a>
+        <a class="brand" href="https://www.incontrolwatersystems.com" target="_blank" rel="noopener"><img src="../assets/logo-incontrol.png" alt="inCon-trol Water Systems" width="220"></a>
+        <p class="kicker">Drip Dash</p>
+        <h1>Water Run</h1>
+        <p class="tagline">Run the real places water works.</p>
+        <p class="month-banner" id="month-banner"></p>
+        <button id="btn-play" class="btn primary big">Play</button>
+        <div class="row">
+          <button id="btn-board" class="btn">Leaderboard</button>
+          <button id="btn-howto" class="btn">How to play</button>
+        </div>
+        <p class="zone-list" id="zone-list"></p>
+        <p id="player-chip" class="player-chip" hidden></p>
+      </div>
+    </section>
+
+    <!-- HOW TO -->
+    <section id="screen-howto" class="screen" hidden aria-label="How to play">
+      <div class="card">
+        <h2>How to play</h2>
+        <ul class="howto">
+          <li><b>Change lanes:</b> <kbd>←</kbd> <kbd>→</kbd> / <kbd>A</kbd> <kbd>D</kbd>, swipe left/right, or click the left/right side of the screen.</li>
+          <li><b>Jump:</b> <kbd>↑</kbd> / <kbd>W</kbd> / <kbd>Space</kbd>, swipe up, or tap/click the middle. Clears low pipes, weir walls and spraying drain grates.</li>
+          <li><b>Slide:</b> <kbd>↓</kbd> / <kbd>S</kbd> or swipe down. Gets you under water arches and beams.</li>
+          <li>Fountain basins and water walls fill the lane: <b>switch lanes</b>. Geysers flash red before they erupt.</li>
+          <li>Clip the side of something and Drip bounces back once. A second bump within 4 s ends the run.</li>
+          <li><b>Drops</b> +10, <b>golden valves</b> +100. Power-ups: <b>Pressure Regulator</b> (shield), <b>Smart Controller</b> (drop magnet), <b>Flow Meter</b> (x2 points), <b>Jet Boost</b> (super speed, smash through anything).</li>
+          <li>Every 450 m you reach a new place inspired by a real inCon-trol project. Your outfit from Drip Dash comes with you!</li>
+        </ul>
+        <button class="btn primary" data-back>Got it</button>
+      </div>
+    </section>
+
+    <!-- REGISTER -->
+    <section id="screen-register" class="screen" hidden aria-label="Register">
+      <form id="form-register" class="card form" novalidate>
+        <h2>Join the leaderboard</h2>
+        <p class="muted">One sign-up covers every Drip Dash game. Your scores count toward the monthly competition.</p>
+        <label>Display name <small>(shown publicly)</small>
+          <input name="name" required minlength="2" maxlength="24" autocomplete="nickname" placeholder="e.g. Jane D.">
+        </label>
+        <label>Business email <small>(never shown)</small>
+          <input name="email" type="email" required maxlength="120" autocomplete="email" placeholder="you@company.com">
+        </label>
+        <label>Company
+          <input name="company" required minlength="2" maxlength="60" autocomplete="organization" placeholder="Company name">
+        </label>
+        <label class="hp" aria-hidden="true">Website <input name="website" tabindex="-1" autocomplete="off"></label>
+        <label class="check"><input type="checkbox" name="consent" required> I agree to the <a href="../rules.html" target="_blank">contest rules &amp; privacy notice</a>.</label>
+        <label class="check"><input type="checkbox" name="optin" checked> Send me the monthly inCon-trol newsletter and game updates.</label>
+        <p class="error" id="reg-error" role="alert"></p>
+        <button class="btn primary" type="submit" id="btn-register">Save &amp; play</button>
+        <button class="btn link" type="button" id="btn-skip">Play without saving scores</button>
+      </form>
+    </section>
+
+    <!-- GAME OVER -->
+    <section id="screen-over" class="screen" hidden aria-label="Game over">
+      <div class="card over-card">
+        <p class="over-kicker" id="over-kicker">Splash!</p>
+        <p class="over-score" id="over-score">0</p>
+        <p class="over-best" id="over-best"></p>
+        <ul class="over-stats" id="over-stats"></ul>
+        <div class="zones-reached" id="over-zones"></div>
+        <p class="over-rank" id="over-rank"></p>
+        <button id="btn-save" class="btn primary" hidden>Save this score</button>
+        <button id="btn-again" class="btn primary big">Play again</button>
+        <div class="row">
+          <button id="btn-board2" class="btn">Leaderboard</button>
+          <button id="btn-share" class="btn">Challenge a colleague</button>
+        </div>
+        <div class="row">
+          <a class="btn link" href="../">← Back to Drip Dash</a>
+          <a class="btn link" href="https://incontrolwatersystems.com/gallery" target="_blank" rel="noopener">See the real projects ↗</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- LEADERBOARD -->
+    <section id="screen-board" class="screen" hidden aria-label="Leaderboard">
+      <div class="card board-card">
+        <h2>🏆 Water Run Leaderboard</h2>
+        <div id="board"></div>
+        <div class="row">
+          <button class="btn primary" data-back>Back</button>
+          <a class="btn" href="../leaderboard.html?game=wrun" target="_blank">Open full page</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- PAUSE -->
+    <section id="screen-pause" class="screen" hidden aria-label="Paused">
+      <div class="card">
+        <h2>Paused</h2>
+        <button id="btn-resume" class="btn primary big">Resume</button>
+        <button id="btn-quit" class="btn link">End run</button>
+        <a class="btn link" href="../">← Back to Drip Dash</a>
+      </div>
+    </section>
+
+    <!-- NO WEBGL -->
+    <section id="screen-nogl" class="screen" hidden aria-label="Not supported">
+      <div class="card">
+        <h2>3D isn't available</h2>
+        <p>Water Run needs WebGL, which this browser or device has turned off. The other Drip Dash games work everywhere.</p>
+        <a class="btn primary big" href="../">Play Drip Dash</a>
+      </div>
+    </section>
+
+    <div id="toast" role="status" hidden></div>
+  </main>
+  <script type="module" src="../js/run-main.js"></script>
+</body>
+</html>

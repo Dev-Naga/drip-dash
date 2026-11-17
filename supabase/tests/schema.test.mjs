@@ -191,5 +191,44 @@ const sadm = await q(`select * from admin.splash_standings limit 5`);
 ok(sadm.length === 1 && sadm[0].email === 'fay@acme.com' && sadm[0].best_score === 1900, 'admin splash standings view');
 const sexp = await q(`select * from admin.player_export where email = 'fay@acme.com'`);
 ok(sexp[0].splash_best_score === 1900 && sexp[0].flow_valley_score === null, 'player export: splash best, not counted as Flow');
+
+// ---------------------------------------------------------------- Water Run ('wrun')
+await asAdmin(); await q(`delete from runs where status = 'started'`); await asAnon();
+const gus = (await q(`select register_player('gus@builders.com','Gus','Builders Inc',true) r`))[0].r;
+async function wrun(key, secs, score, dist, drops, valves, pups, level = 'WRUN') {
+  const t = (await q(`select start_run($1, $2) r`, [key, level]))[0].r;
+  await asAdmin(); await q(`update runs set started_at = now() - make_interval(secs => $1) where id = $2`, [secs + 1, t.run_id]); await asAnon();
+  return (await q(`select submit_water_run($1,$2,$3,$4,$5,$6,$7,$8) r`, [t.run_id, key, score, Math.round(secs * 1000), dist, drops, valves, pups]))[0].r;
+}
+r = await wrun(gus.player_key, 74, 3954, 1634, 147, 3, 4);
+ok(r.accepted && r.best_month === 3954 && r.month_rank === 1, `wrun: valid run accepted (${JSON.stringify(r)})`);
+r = await wrun(gus.player_key, 40, 1700, 708, 48, 2, 1);
+ok(r.accepted && r.best_month === 3954, 'wrun: board keeps best single run');
+r = await wrun(gus.player_key, 30, 20000, 900, 30, 1, 1);
+ok(!r.accepted && /bonus/.test(r.reason), `wrun: inflated score rejected (${r.reason})`);
+await asAdmin(); await q(`delete from runs where status = 'started'`); await asAnon();
+r = await wrun(gus.player_key, 10, 3000, 3000, 0, 0, 0);
+ok(!r.accepted && /distance/.test(r.reason), `wrun: impossible distance rejected (${r.reason})`);
+r = await wrun(gus.player_key, 20, 2000, 500, 200, 0, 0);
+ok(!r.accepted && /drops/.test(r.reason), `wrun: impossible drops rejected (${r.reason})`);
+r = await wrun(gus.player_key, 30, 600, 500, 5, 0, 0, 'RUN');
+ok(!r.accepted && /not for Water Run/.test(r.reason), `wrun: runner ticket can't post a Water Run score (${r.reason})`);
+await asAdmin(); await q(`delete from runs where status = 'started'`); await asAnon();
+{
+  const t = (await q(`select start_run($1,'WRUN') r`, [gus.player_key]))[0].r;
+  await asAdmin(); await q(`update runs set started_at = now() - interval '30 seconds' where id = $1`, [t.run_id]); await asAnon();
+  const x = (await q(`select submit_run($1,$2,500,20000,400,0,0) r`, [t.run_id, gus.player_key]))[0].r;
+  ok(!x.accepted, 'Water Run ticket can\'t post a Drip Dash score');
+}
+const wlb = await q(`select * from get_leaderboard('month', null, 10, 'wrun')`);
+ok(wlb.length === 1 && wlb[0].display_name === 'Gus' && Number(wlb[0].score) === 3954, 'wrun board only has Water Run players ' + JSON.stringify(wlb.map((x) => [x.display_name, Number(x.score)])));
+ok(!(await q(`select * from get_leaderboard('month', null, 10)`)).some((x) => x.display_name === 'Gus'), 'Drip Dash board excludes Water Run scores');
+ok(!(await q(`select * from get_leaderboard('month', null, 10, 'splash')`)).some((x) => x.display_name === 'Gus'), 'Splash board excludes Water Run scores');
+ok(!(await q(`select * from get_leaderboard('month', null, 10, 'flow')`)).some((x) => x.display_name === 'Gus'), 'Flow board excludes Water Run scores');
+await asAdmin();
+const wadm = await q(`select * from admin.water_run_standings limit 5`);
+ok(wadm.length === 1 && wadm[0].email === 'gus@builders.com' && wadm[0].best_score === 3954, 'admin Water Run standings view');
+const wexp = await q(`select * from admin.player_export where email = 'gus@builders.com'`);
+ok(wexp[0].water_run_best_score === 3954 && wexp[0].flow_valley_score === null && wexp[0].dash_best_score === null, 'player export: Water Run best, not counted elsewhere');
 console.log(fails ? `\n${fails} FAILURE(S)` : '\nALL TESTS PASSED');
 process.exit(fails ? 1 : 0);
