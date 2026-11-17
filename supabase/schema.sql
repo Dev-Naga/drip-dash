@@ -506,3 +506,16 @@ create view admin.rejected_runs as
   where r.status = 'rejected' order by r.submitted_at desc;
 
 revoke all on all tables in schema admin from anon, authenticated;
+
+-- --------------------------------------------------------------- hardening (Supabase security advisor)
+alter function private.current_month() set search_path = pg_catalog;
+alter function private.client_ip_hash() set search_path = pg_catalog;
+alter function private.valley(text) set search_path = public, private, pg_catalog;
+alter function private.best_run(text, text) set search_path = public, private, pg_catalog;
+alter function private.standings(text, text) set search_path = public, private, pg_catalog;
+-- Supabase's own RLS event-trigger function: never needs to be callable over the API
+do $$ begin
+  if to_regprocedure('public.rls_auto_enable()') is not null then
+    revoke execute on function public.rls_auto_enable() from public, anon, authenticated;
+  end if;
+end $$;
