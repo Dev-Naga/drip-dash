@@ -334,9 +334,12 @@ end $$;
 --   top speed 30 m/s, x1.5 during Jet Boost = 45 m/s; a drop is worth at most 10 x 2 (Flow Meter) = 20;
 --   a golden valve at most 100 x 2 = 200; a power-up pickup 25. Drops: at most 5 per obstacle row,
 --   rows at least 0.62 s apart; valves at least 6 s apart; power-ups at least 10 s apart.
+--   Water delivery: 3 supply inlets per 300 m stop, 150 points each; completing all 3 in a stop adds 300.
+drop function if exists public.submit_water_run(uuid, uuid, int, int, int, int, int, int);
 create or replace function public.submit_water_run(
   p_run_id uuid, p_player_key uuid, p_score int, p_duration_ms int,
-  p_distance int, p_drops int, p_valves int, p_powerups int
+  p_distance int, p_drops int, p_valves int, p_powerups int,
+  p_deliveries int default 0, p_stops int default 0
 ) returns json
 language plpgsql security definer set search_path = public, private as $$
 declare v_run public.runs; v_pid uuid; v_blocked boolean; v_elapsed_ms numeric; v_reason text := null; v_secs numeric;
@@ -361,8 +364,10 @@ begin
   elsif p_drops is null or p_drops < 0 or p_drops > v_secs * 9 + 10 then v_reason := 'too many drops for run time';
   elsif p_valves is null or p_valves < 0 or p_valves > v_secs / 5 + 3 then v_reason := 'too many valves for run time';
   elsif p_powerups is null or p_powerups < 0 or p_powerups > v_secs / 9 + 2 then v_reason := 'too many power-ups for run time';
+  elsif coalesce(p_deliveries, 0) < 0 or coalesce(p_deliveries, 0) > p_distance / 100 + 3 then v_reason := 'too many water deliveries for distance';
+  elsif coalesce(p_stops, 0) < 0 or coalesce(p_stops, 0) * 3 > coalesce(p_deliveries, 0) then v_reason := 'too many completed stops';
   elsif p_score < p_distance then v_reason := 'score lower than distance';
-  elsif p_score > p_distance + p_drops * 20 + p_valves * 200 + p_powerups * 25 + 10 then v_reason := 'score exceeds possible bonus';
+  elsif p_score > p_distance + p_drops * 20 + p_valves * 200 + p_powerups * 25 + coalesce(p_deliveries, 0) * 150 + coalesce(p_stops, 0) * 300 + 10 then v_reason := 'score exceeds possible bonus';
   end if;
 
   update public.runs set player_id = v_pid, submitted_at = now(), score = p_score, duration_ms = p_duration_ms,
@@ -431,7 +436,7 @@ grant execute on function
   public.submit_run(uuid, uuid, int, int, int, int, int),
   public.submit_level(uuid, uuid, text, int, int, int),
   public.submit_splash(uuid, uuid, int, int, int, int),
-  public.submit_water_run(uuid, uuid, int, int, int, int, int, int),
+  public.submit_water_run(uuid, uuid, int, int, int, int, int, int, int, int),
   public.get_player_summary(uuid, text),
   public.get_leaderboard(text, text, int, text),
   public.get_company_board(text, int, text),

@@ -1,10 +1,10 @@
 // Water Run — UI controller: screens, controls (keys / swipe / click), registration, run tickets, scores.
 // Water Run scripts load with a ?v= tag (see run/index.html) so a deploy never mixes old and new files from the browser cache. Bump it on every change.
-import { api, store, currentMonth, monthLabel } from './api.js';
+import { api, store, currentMonth, monthLabel } from './api.js?v=wr14';
 import { LIVE } from './config.js';
-import { sfx, ambience } from './audio.js?v=wr10';
+import { sfx, ambience } from './audio.js?v=wr14';
 import { mountBoard } from './board.js';
-import { PROJECTS, photoSources } from './run-projects.js?v=wr10';
+import { PROJECTS, photoSources } from './run-projects.js?v=wr14';
 
 const $ = (s) => document.querySelector(s);
 const screens = ['title', 'howto', 'register', 'over', 'board', 'pause', 'nogl', 'project', 'collection'];
@@ -20,6 +20,8 @@ function show(name) {
   $('#hud-buttons').hidden = !playing;
   $('#run-hud').hidden = !playing;
   $('#journey').hidden = !playing;
+  $('#mission').hidden = !playing;
+  if (!playing) $('#stop-card').hidden = true;
   if (!playing) $('#proj-chip').hidden = true;
   if (name && !['board', 'howto', 'project', 'collection'].includes(name)) lastScreen = name;
 }
@@ -31,6 +33,20 @@ function pop(msg) {
   const p = $('#pop'); p.textContent = msg; p.hidden = false; p.classList.remove('go'); void p.offsetWidth; p.classList.add('go');
   clearTimeout(pop.h); pop.h = setTimeout(() => (p.hidden = true), 1600);
 }
+const cap = (t) => t.charAt(0).toUpperCase() + t.slice(1);
+// compact project card: name, verified location + one-line description, the stop's mission; ~4 s, dismissible
+function stopCard(zone, lap = 0) {
+  const c = $('#stop-card'), last = zone.idx === PROJECTS.length - 1;
+  $('#sc-kicker').textContent = `${lap ? 'Encore · ' : ''}${last ? 'Destination' : `Stop ${zone.idx + 1} of ${PROJECTS.length}`} · ${zone.time}`;
+  $('#sc-name').textContent = zone.name;
+  $('#sc-loc').textContent = zone.location ? `📍 ${zone.location}` : '📍 Location not published in the inCon-trol gallery';
+  $('#sc-blurb').textContent = zone.blurb;
+  $('#sc-mission').innerHTML = `Mission: supply <b>${zone.supply}</b> through 3 inlets`;
+  c.hidden = false; c.classList.remove('go'); void c.offsetWidth; c.classList.add('go');
+  clearTimeout(stopCard.h); stopCard.h = setTimeout(() => (c.hidden = true), 4000);
+}
+$('#sc-close').addEventListener('pointerdown', (e) => { e.stopPropagation(); e.preventDefault(); clearTimeout(stopCard.h); $('#stop-card').hidden = true; });
+function flashTank(kind) { const t = $('#mission'); t.classList.remove('good', 'bad'); void t.offsetWidth; t.classList.add(kind); }
 function zoneBanner(zone, lap = 0) {
   const b = $('#zone-banner');
   const last = zone.idx === PROJECTS.length - 1;
@@ -45,11 +61,15 @@ async function boot() {
   try {
     const test = document.createElement('canvas');
     if (!(test.getContext('webgl2') || test.getContext('webgl'))) throw new Error('no webgl');
-    const mod = await import('./run-game.js?v=wr10');
+    const mod = await import('./run-game.js?v=wr14');
     ZONES = mod.ZONES;
     game = new mod.WaterRun($('#game'), {
       onGameOver: (r) => onGameOver(r),
-      onZone: (z, first) => { if (!first) zoneBanner(z, game.lap); },
+      onZone: (z) => { stopCard(z, game.lap); },
+      onDeliver: (z, n) => { pop(n === 3 ? `💧 ${cap(z.supply)} running! 3/3` : `💧 Water delivered: ${z.supply} ${n}/3 · +150`); flashTank('good'); },
+      onStopComplete: (z) => setTimeout(() => pop(`⛲ ${z.short} fully supplied! +300`), 900),
+      onDry: () => { pop('Not enough water! Collect drops 💧 to fill the tank'); flashTank('bad'); },
+      onMissed: () => {},
       onArrive: () => { celebrate(); },
       onToast: (m) => toast(m),
       onPop: (m) => pop(m),
@@ -93,6 +113,13 @@ function hud() {
     $('#jr-fill').style.width = `${k * 100}%`; $('#jr-drip').style.left = `${k * 100}%`;
     const left = Math.max(0, Math.ceil((J - d) / 10) * 10);
     $('#jr-label').textContent = game.lap > 0 ? `Encore lap ${game.lap} · ${game.zone.short}` : game.arrived ? 'Commons at Agora: show is ON!' : `${game.zone.short} · ${left.toLocaleString()} m to Commons at Agora`;
+    // water tank + this stop's supply progress
+    const w = Math.round(game.water);
+    $('#ms-fill').style.width = `${w}%`; $('#ms-pct').textContent = `${w}%`;
+    $('#mission').classList.toggle('low', w < 35);
+    const zi = Math.floor(game.dist / 300), done = game.stopProgress.get(zi) || 0;
+    const key = `${zi}|${done}|${game.zone.id}`;
+    if (hud.mk !== key) { hud.mk = key; $('#ms-text').textContent = done >= 3 ? `${cap(game.zone.supply)}: fully supplied ✔` : `Supply ${game.zone.supply}`; $('#ms-pips').innerHTML = [0, 1, 2].map((i) => `<i class="${i < done ? 'on' : ''}"></i>`).join(''); }
     // nearby project sign
     const np = game.state === 'playing' ? game.nearProject : null;
     if (np) { $('#pc-name').textContent = innerWidth < 600 ? np.short : np.name; }
@@ -110,7 +137,6 @@ function startGame() {
   const ticket = api.startRun(player?.player_key, 'WRUN').catch((e) => ({ error: e.message }));
   run = { ticket };
   game.start((Date.now() ^ Math.floor(Math.random() * 1e9)) >>> 0);
-  zoneBanner(ZONES[0]);
 }
 function wantPlay() {
   if (!player && !skipped) { afterRegister = startGame; show('register'); prefill(); return; }
@@ -186,9 +212,9 @@ async function onGameOver(r) {
   $('#over-best').textContent = `Your best: ${Math.max(best, r.score).toLocaleString()}`;
   $('#over-stats').innerHTML = `
     <li><b>${r.distance.toLocaleString()} m</b><span>distance</span></li>
-    <li><b>${r.drops}</b><span>drops</span></li>
-    <li><b>${r.valves}</b><span>golden valves</span></li>
-    <li><b>${(r.durationMs / 1000).toFixed(0)}s</b><span>run time</span></li>`;
+    <li><b>${r.deliveries}</b><span>water deliveries</span></li>
+    <li><b>${r.stopsDone}</b><span>stops fully supplied</span></li>
+    <li><b>${r.drops}</b><span>drops</span></li>`;
   $('#over-journey').innerHTML = r.arrived
     ? `⛲ <b>You reached Commons at Agora</b> and switched on the evening show!${r.laps ? ` Plus ${r.laps} encore lap${r.laps > 1 ? 's' : ''}.` : ''}`
     : `You made it to <b>stop ${r.stop} of 8: ${ZONES[r.stop - 1].short}</b>. ${Math.max(0, 2400 - r.distance).toLocaleString()} m short of Commons at Agora.`;
@@ -212,7 +238,7 @@ async function submit(r) {
   try {
     const ticket = await run.ticket;
     if (ticket?.error) throw new Error(ticket.error);
-    const res = await api.submitRun({ level: 'WRUN', runId: ticket.run_id, playerKey: player.player_key, score: r.score, durationMs: r.durationMs, distance: r.distance, drops: r.drops, valves: r.valves, powerups: r.powerups });
+    const res = await api.submitRun({ level: 'WRUN', runId: ticket.run_id, playerKey: player.player_key, score: r.score, durationMs: r.durationMs, distance: r.distance, drops: r.drops, valves: r.valves, powerups: r.powerups, deliveries: r.deliveries, stopsDone: r.stopsDone });
     if (res && res.accepted === false) { rank.textContent = `Score not counted: ${res.reason || 'failed verification'}.`; return; }
     const bits = [];
     if (res?.month_rank) bits.push(`You're #${res.month_rank} of ${res.month_players} this month`);
@@ -251,11 +277,12 @@ function openProject(id, fromRun) {
   img.onerror = () => { k++; if (k < srcs.length) img.src = srcs[k]; else { img.hidden = true; $('#pj-noimg').hidden = false; } };
   img.src = srcs[0];
   const facts = [['Project', p.name]];
-  if (p.location) facts.push(['Location', p.location]);
-  if (p.summary) facts.push(['About', p.summary]);
+  facts.push(['Location', p.location || 'Not published in the inCon-trol gallery']);
+  facts.push(['About', p.blurb]);
   facts.push(['In the photo', p.seen]);
   facts.push(['Architect / designer', 'Not listed in the inCon-trol gallery']);
   facts.push(['Listed in', 'inCon-trol Water Systems project gallery']);
+  if (p.sources?.length) facts.push(['Sources', p.sources.map((u) => `<a href="${u}" target="_blank" rel="noopener">${new URL(u).hostname.replace('www.', '')}</a>`).join(' · ')]);
   $('#pj-facts').innerHTML = facts.map(([k2, v]) => `<dt>${k2}</dt><dd>${v}</dd>`).join('');
   $('#pj-close').textContent = fromRun ? 'Resume run' : 'Back';
   show('project');
@@ -347,6 +374,7 @@ addEventListener('keydown', (e) => {
     else if (['ArrowDown', 's', 'S'].includes(k)) { e.preventDefault(); if (!e.repeat) game.slide(); }
     else if (['p', 'P', 'Escape'].includes(k)) doPause();
     else if (['i', 'I'].includes(k) && game.nearProject) openProject(game.nearProject.id, true);
+    else if (k === 'Enter' && !$('#stop-card').hidden) { clearTimeout(stopCard.h); $('#stop-card').hidden = true; }
   } else if (!$('#screen-project').hidden && ['Escape', 'Enter', 'i', 'I'].includes(k)) {
     e.preventDefault(); $('#pj-close').click();
   } else if (game && game.state === 'paused' && ['p', 'P', 'Escape', ' '].includes(k)) {

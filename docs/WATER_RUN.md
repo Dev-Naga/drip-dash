@@ -17,6 +17,86 @@ Water Run is a 3D, three-lane runner in the Drip Dash portal. Players run Drip a
 - **Replay:** the run doesn't end at the destination. The Trail loops as encore laps for a high score.
 - **Game over:** the screen says how far along the Trail the player got ("stop 4 of 8 … 1,050 m short of Commons at Agora"), or that they arrived.
 
+## Water-delivery gameplay
+Drip carries water to the Trail's water features. Every movement serves that job: collect water, get to the inlets, switch features on.
+
+**The tank**
+| | |
+|---|---|
+| Start | 50% |
+| Drop | +4% |
+| Golden valve | +25% |
+| Power-up | +10% |
+| Evaporation | −3.2% per second |
+
+The tank gauge sits top-right on desktop and at the bottom on phones. It turns red below the 35% delivery cost, and a tick on the gauge marks that level.
+
+**Supply inlets**
+- Every stop has three glowing gold inlets with water beacons, in sections 2, 5 and 8 (90 m apart). Each sits in a set lane, and a pipe runs from it to the project's feature.
+- Rows of obstacles never block an inlet's lane.
+
+**Delivering**
+- Run through an inlet with at least 35% water to deliver: −35% water, +150 points.
+  - The pipe pulses, the valve spins and water splashes.
+  - The project's features for the next 120 m come on as Drip runs past them.
+- With too little water, the inlet stays dry and a "Not enough water!" message appears.
+- A missed inlet means that stretch stays dry, so the player can see the job left undone.
+
+**Completing a stop:** supplying all 3 inlets earns +300 and a "fully supplied" message. The HUD shows progress as three pips.
+
+**Pacing:** in testing, bots that chased drops ran dry 1–2 times per run; bots that didn't, 2–6 times. So collecting water matters without the game becoming a chore.
+
+### Why three lanes, not a single Temple Run-style path
+Each project is a plaza, walkway or bridge, and three lanes fit those spaces naturally. Lanes also give the delivery mechanic clear choices ("the inlet is in the left lane, past a pedestrian"). They keep the existing controls, obstacles, scoring and leaderboards. A single path would remove that choice and turn delivery into a timing check.
+
+### What each stop's water does when supplied
+| Stop | Supplied by the inlets | Location (verified) |
+|---|---|---|
+| Melissa Lake Park | The tipping bucket dumps (straight after a delivery, then every 7 s); spray hoops and splash-pad jets switch on | Melissa, TX |
+| The Epic East | The koi pond fills and the angular basin spills over its edge | Deep Ellum, Dallas, TX |
+| McKinney City Hall | The steel hopper pours into its basin | McKinney, TX |
+| 3300 Olympus Drive | Water runs down the stepped cascades one step after another | Cypress Waters, Dallas, TX |
+| Aggie Park | Fountains spray up out of the pond. **Pedestrians walk toward you along the bridge path**, so change lanes around them. | Texas A&M University, College Station, TX |
+| Dallas Arboretum | The stream fills and the water curtains fall from the elevated walkway | Dallas Arboretum, Dallas, TX |
+| Chase Tower | The reflecting basins fill and the bubbler rows rise. Downtown pedestrians walk the path here too. | Not published in the gallery (not verified, so not shown) |
+| Commons at Agora | The lit evening jet show and the finale fountains come on | Corinth, TX |
+
+Park scenes (splash pads, fountains, gate fountains) and the stream Drip follows are always running. Only the project's own installation depends on deliveries.
+
+### Stop cards (project transitions)
+On entering a stop, a compact card appears bottom-left (top on phones) for 4 seconds while play continues. It shows:
+- the stop number and time of day
+- the project name
+- 📍 the location
+- one verified sentence about the project
+- the mission ("supply the stepped cascades through 3 inlets")
+
+A timer bar shows how long it has left. Dismiss it straight away with **×** or <kbd>Enter</kbd>. All 8 stops use the same design.
+
+Locations and descriptions were checked against public sources (city sites, news, Texas TDLR records, landscape-architecture press). The URLs are in `sources` in `site/js/run-projects.js` and are linked in each project panel. No architects are named.
+
+### Camera
+- The camera follows Drip by sliding sideways only; it never rotates. In testing over 80 seconds of lane changes, measured roll and yaw stayed at exactly 0.
+- The field of view is fixed: no speed or boost zoom, and no run bob.
+- Drip shows the lane change instead: it leans, stretches sideways, hops slightly and leaves a spray trail.
+
+### Server checks for Water Run scores (`submit_water_run`)
+- **Ticket:** a one-time server ticket for level `WRUN`. It can't be reused or used for another game.
+- **Run time:** checked against the server clock.
+- **Limits:**
+
+  | Item | Most allowed |
+  |---|---|
+  | Distance | 46 m/s |
+  | Drops | 9 per second + 10 |
+  | Golden valves | seconds / 5 + 3 |
+  | Power-ups | seconds / 9 + 2 |
+  | Water deliveries | distance / 100 + 3 |
+  | Completed stops | deliveries / 3 |
+
+- **Score ceiling:** distance + drops × 20 + valves × 200 + power-ups × 25 + deliveries × 150 + stops × 300 + 10.
+- **Database tests:** 76 automated checks pass.
+
 ## The eight stops (all real gallery projects)
 Each stop is 300 m. Each scene is a stylised low-poly version of the gallery photo, with no copied 3D assets. Obstacles change their look per stop but keep the same hitboxes.
 
@@ -92,7 +172,7 @@ Each stop has a hand-planned layout (`LAYOUTS` in `run-game.js`): a left and a r
 - **Floating particles:** sparkles, pollen, mist by the cascades, falling autumn leaves, golden motes at sunset, and fireflies at night. They stay clear of the lanes.
 - **Water:** reflective, normal-mapped surfaces; flowing falling water; water features switch on as Drip arrives. Drip splashes through puddles on wet walkways.
 - **Sound** (all synthesized, no audio files): a fountain-water bed whose level depends on the stop, birdsong by day and crickets at night. It plays only during a run and respects mute.
-- **Camera:** an intro swoop, a field of view that widens slightly with speed and more on Jet Boost, and a gentle roll into lane changes. Roll and shake are off with reduced-motion settings.
+- **Camera:** an intro swoop, then a steady follow camera that never rotates (see above). A short vertical shake on a crash, off with reduced-motion settings.
 
 ## Gameplay and scoring
 Unchanged from the first version:
@@ -103,7 +183,7 @@ Unchanged from the first version:
 - speed from 13 to 30 m/s
 - score = metres + pickups
 
-The server checks in `submit_water_run` are unchanged, and every simulated run passed them. In simulated runs, bots survived 19–106 s, and the best runs reached Commons at Agora in about 95–105 s.
+Every simulated run passed the server checks in `submit_water_run` (see above). In simulated runs with water delivery, bots lasted 15–226 s and often reached Commons at Agora. Human players will be slower than these bots.
 
 ## Performance
 - **Merging:** each 30 m section's static, opaque scenery (including seated people) is merged into one mesh per material. Because every stop and section is identical on each lap, the merge happens once and is cached. After that, updating the world takes about 1 ms per frame.

@@ -53,7 +53,7 @@ const live = {
   }),
   startRun: (playerKey, level = 'RUN') => rpc('start_run', { p_player_key: playerKey || null, p_level: level }),
   submitRun: (r) => (r.level === 'WRUN'
-    ? rpc('submit_water_run', { p_run_id: r.runId, p_player_key: r.playerKey, p_score: r.score, p_duration_ms: r.durationMs, p_distance: r.distance, p_drops: r.drops, p_valves: r.valves, p_powerups: r.powerups })
+    ? rpc('submit_water_run', { p_run_id: r.runId, p_player_key: r.playerKey, p_score: r.score, p_duration_ms: r.durationMs, p_distance: r.distance, p_drops: r.drops, p_valves: r.valves, p_powerups: r.powerups, p_deliveries: r.deliveries || 0, p_stops: r.stopsDone || 0 })
     : r.level === 'SPLASH'
     ? rpc('submit_splash', { p_run_id: r.runId, p_player_key: r.playerKey, p_score: r.score, p_duration_ms: r.durationMs, p_drops: r.drops, p_powerups: r.powerups })
     : r.level && r.level !== 'RUN'

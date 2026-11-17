@@ -5,11 +5,17 @@
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { sfx } from './audio.js?v=wr10';
-import { PROJECTS, photoSources } from './run-projects.js?v=wr10';
+import { sfx } from './audio.js?v=wr14';
+import { PROJECTS, photoSources } from './run-projects.js?v=wr14';
 
 // Scoring rules — the server checks scores against these (supabase/schema.sql → submit_water_run).
-export const RULES = { DROP: 10, VALVE: 100, POWERUP: 25, MULT: 2, START_SPEED: 13, MAX_SPEED: 30, BOOST: 1.5 };
+export const RULES = { DROP: 10, VALVE: 100, POWERUP: 25, MULT: 2, START_SPEED: 13, MAX_SPEED: 30, BOOST: 1.5,
+  DELIVERY: 150, STOP_BONUS: 300, TANK_START: 50, TANK_MAX: 100, TANK_COST: 35, DROP_WATER: 4, VALVE_WATER: 25, POWER_WATER: 10, EVAPORATE: 3.2 };
+// Water delivery: every stop has 3 supply inlets (sections 2, 5 and 8). Running through one with at least
+// TANK_COST water switches on the project's water features for the next 4 sections (120 m).
+const INLET_SLOTS = { 2: 0, 5: 1, 8: 2 };
+const INLET_LANES = [[-1, 1, 0], [1, -1, 0], [0, 1, -1], [-1, 0, 1], [0, -1, 1], [1, 0, -1], [-1, 1, 0], [0, -1, 1]];
+export const INLETS_PER_STOP = 3;
 
 const LANE = 2.2;
 const STEP = 1 / 120;
@@ -469,6 +475,7 @@ void main() {
     this.rowDist = 34; this.nextValve = 6; this.nextPower = 9; this.lastFree = 1;
     this.zone = ZONES[0]; this.zonesSeen = [ZONES[0].id]; this.arrived = false; this.lap = 0;
     this.nearProject = null; this.intro = 0;
+    this.water = RULES.TANK_START; this.deliveries = 0; this.stopsDone = 0; this.powered = new Set(); this.stopProgress = new Map();
     this.dead = false; this.deathT = 0;
     // segments aligned so every stop starts exactly on a segment edge
     for (let i = 0; i < SEG_COUNT; i++) this.addSegment(SEG_LEN / 2 - i * SEG_LEN);
@@ -531,7 +538,7 @@ void main() {
   buildSegment(s) {
     for (const c of [...s.children]) s.remove(c);
     const info = this.segInfo(s), zone = info.zone, R = mulberry(info.index * 131 + 7);
-    s.userData = { anims: [], wakers: [], boards: [], puddles: [], zone, info, wake: 0, woke: false };
+    s.userData = { anims: [], wakers: [], always: [], boards: [], puddles: [], zone, info, wake: 0, aw: 0, woke: false, inlet: null };
     const T = textures(), W = waterMats();
     const bridge = zone.id === 'aggie';
     // walkway
@@ -544,7 +551,7 @@ void main() {
       flat(plane(0.95, SEG_LEN), mat(0x24343c, { rough: 1 }), -4.5, -0.12, 0, s);
       const stream = flat(plane(0.95, SEG_LEN), zone.night ? W.glowPool : W.channel, -4.5, -0.03, 0, s);
       flat(plane(0.22, SEG_LEN), coping, -5.09, 0.004, 0, s);
-      s.userData.wakers.push((w) => { stream.position.y = -0.11 + 0.08 * w; });
+      s.userData.always.push((w) => { stream.position.y = -0.11 + 0.08 * w; });
       flat(plane(1.0, SEG_LEN), coping, 4.3, 0.002, 0, s);
     }
     // side ground (Aggie Park: pond near the bridge, lawn on the far shores)
@@ -562,6 +569,7 @@ void main() {
       if (L[1]) mods[L[1]].call(this, s, 1, mx, info.k, zone);
     }
     if (info.k === 0) this.gateway(s, zone);
+    if (info.k in INLET_SLOTS) this.inlet(s, zone, info, INLET_SLOTS[info.k]);
     // branded billboards and the clickable project billboard (fixed spots in every stop)
     if (info.k === 2 || info.k === 7) this.brandBoard(s, (zone.idx * 2 + (info.k === 7 ? 1 : 0)) % BRAND_ADS.length, info.k === 2 ? -1 : 1, info.k === 2 ? -3 : 3, zone);
     if (info.k === 4) this.projectBoard(s, zone, zone.idx % 2 ? 1 : -1);
@@ -624,8 +632,51 @@ void main() {
     for (const sx of [-1, 1]) {
       const j = M(cyl(0.05, 0.22, 2.6, 10), zone.night ? waterMats().glowJet : waterMats().jet, sx * 6.3, 1.3, z, s);
       M(cyl(0.6, 0.7, 0.35, 16), mat(0x9a9488, { rough: 0.8 }), sx * 6.3, 0.17, z, s);
-      s.userData.wakers.push((w, t) => { j.scale.y = Math.max(0.01, w * (0.85 + 0.15 * Math.sin(t * 9 + sx))); j.position.y = 1.3 * j.scale.y + 0.2; });
+      s.userData.always.push((w, t) => { j.scale.y = Math.max(0.01, w * (0.85 + 0.15 * Math.sin(t * 9 + sx))); j.position.y = 1.3 * j.scale.y + 0.2; });
     }
+  }
+
+  // supply inlet: a glowing valve ring in one lane, with a pipe to the project's water feature
+  inlet(s, zone, info, slot) {
+    const lane = INLET_LANES[zone.idx][slot], x = lane * LANE, z = -2, sx = lane > 0 ? 1 : lane < 0 ? -1 : (slot % 2 ? 1 : -1);
+    const g = new THREE.Group(); g.position.set(x, 0, z); g.userData.dynamic = true; s.add(g);
+    M(cyl(1.08, 1.08, 0.06, 32), mat(0xffc845, { emissive: 0xffb000, ei: 0.6, rough: 0.4 }), 0, 0.03, 0, g);
+    const glow = M(cyl(0.82, 0.82, 0.07, 32), cachedMat('inlet-idle', () => new THREE.MeshStandardMaterial({ color: 0x00c1d5, emissive: 0x00c1d5, emissiveIntensity: 1.1, roughness: 0.3 })), 0, 0.04, 0, g);
+    for (let i = -2; i <= 2; i++) M(box(0.06, 0.04, 1.4), mat(0x2b2f35, { metal: 0.6 }), i * 0.28, 0.09, 0, g);
+    const wheel = M(torus(0.32, 0.06, TAU, 8, 18), mat(0x005695, { metal: 0.5, rough: 0.4 }), 0, 0.14, 0, g); wheel.rotation.x = Math.PI / 2;
+    // floating chevrons say "run through here"
+    const arrow = new THREE.Group(); arrow.position.y = 2.2; g.add(arrow);
+    for (let i = 0; i < 2; i++) { const c = M(cone(0.5, 0.6, 4), cachedMat('inlet-arrow', () => new THREE.MeshBasicMaterial({ color: 0xffc845, toneMapped: false })), 0, i * 0.55, 0, arrow); c.rotation.x = Math.PI; c.rotation.y = Math.PI / 4; }
+    // a soft beacon of water rising from the inlet, visible from far down the path
+    const beacon = M(cyl(0.55, 0.75, 5, 18), cachedMat('inlet-beacon', () => new THREE.MeshBasicMaterial({ color: 0x7fe9f5, transparent: true, opacity: 0.28, depthWrite: false, toneMapped: false })), 0, 2.5, 0, g);
+    // supply pipe to the feature side, with a pulse that travels along it after a delivery
+    const len = Math.abs(sx * 6.6 - x);
+    const pipe = M(box(len, 0.16, 0.22), mat(0x2f6fb3, { metal: 0.5, rough: 0.35 }), (sx * 6.6 - x) / 2, 0.08, 0, g);
+    const pulse = M(sph(0.22, 12), cachedMat('inlet-pulse', () => new THREE.MeshBasicMaterial({ color: 0xbff8ff, toneMapped: false })), 0, 0.2, 0, g); pulse.visible = false;
+    const inl = { lane, z, slot, state: 'idle', g, glow, arrow, pulse, sx, x, len, fired: 0, zoneAbs: Math.floor(info.index / (ZONE_LEN / SEG_LEN)), index: info.index, zone };
+    s.userData.inlet = inl;
+    s.userData.anims.push((t) => {
+      arrow.visible = beacon.visible = inl.state === 'idle';
+      arrow.position.y = 2.0 + Math.sin(t * 4) * 0.15;
+      wheel.rotation.z = inl.state === 'done' ? t * 6 : 0;
+      if (inl.state === 'done' && inl.fired) { const k = Math.min(1, (this.clock - inl.fired) / 0.7); pulse.visible = k < 1; pulse.position.x = (sx * 6.6 - x) * k; }
+    });
+  }
+  deliver(s, inl) {
+    if (this.water < RULES.TANK_COST) {
+      inl.state = 'dry'; inl.glow.material = cachedMat('inlet-dry', () => new THREE.MeshStandardMaterial({ color: 0x5a6068, roughness: 0.6 }));
+      sfx.bad(); this.hooks.onDry?.(inl.zone);
+      return;
+    }
+    this.water -= RULES.TANK_COST; this.deliveries++; this.bonus += RULES.DELIVERY;
+    inl.state = 'done'; inl.fired = this.clock;
+    inl.glow.material = cachedMat('inlet-done', () => new THREE.MeshStandardMaterial({ color: 0x7ed957, emissive: 0x4fbf2a, emissiveIntensity: 1.0, roughness: 0.3 }));
+    for (let i = 0; i < 4; i++) this.powered.add(inl.index + i);
+    const n = (this.stopProgress.get(inl.zoneAbs) || 0) + 1; this.stopProgress.set(inl.zoneAbs, n);
+    this.splash(this.px, 0.4, 0, REDUCED ? 12 : 34); this.happy = 1;
+    sfx.valveOpen(); setTimeout(() => sfx.sparkle?.(), 180);
+    this.hooks.onDeliver?.(inl.zone, n);
+    if (n === INLETS_PER_STOP) { this.stopsDone++; this.bonus += RULES.STOP_BONUS; setTimeout(() => sfx.win(), 350); this.hooks.onStopComplete?.(inl.zone); }
   }
 
   // Billboards are static: a solid frame, and an unlit face 8 cm in front of it with a depth offset.
@@ -680,7 +731,12 @@ void main() {
     const bucket = new THREE.Group(); bucket.position.set(0, h * 0.7 + 3.4, 0); bucket.userData.dynamic = true; g.add(bucket);
     M(cyl(0.9, 0.65, 1.1, 16), mat(0xffc845, { rough: 0.4 }), 0, 0, 0, bucket, true);
     const pour = M(cyl(0.6, 1.5, h * 0.95, 14), waterMats().sheet, 0.6, h * 0.5, 0.6, g);
-    s.userData.anims.push((t) => { const k = (t % 7) / 7; bucket.rotation.z = k > 0.82 ? Math.min(1.9, (k - 0.82) * 14) : k * 0.1; pour.visible = k > 0.87 && k < 0.99; });
+    s.userData.anims.push((t) => {
+      const u = s.userData, on = u.info && u.info.k >= 0 ? u.wake > 0.5 : true;
+      const k = (((t - (u.poweredAt || 0)) + 5.6) % 7) / 7;
+      bucket.rotation.z = on && k > 0.82 ? Math.min(1.9, (k - 0.82) * 14) : (on ? k * 0.1 : 0);
+      pour.visible = on && k > 0.87 && k < 0.99;
+    });
     const slide = M(torus(2.6, 0.5, Math.PI * 0.75, 10, 20), mat(0xf6f6f6, { rough: 0.25 }), 2.6, h * 0.42 - 0.2, 0, g, true); slide.rotation.y = Math.PI / 2; slide.rotation.z = -0.2;
     return g;
   }
@@ -745,7 +801,7 @@ void main() {
         flat(geo('puddle26', () => new THREE.CircleGeometry(2.4, 28)), night ? W.glowPool : W.pool, 0, 0.035, 0, g);
         const jets = [];
         for (let i = 0; i < 7; i++) { const a = (i / 6) * TAU, r = i === 6 ? 0 : 1.7; const j = M(cyl(0.04, 0.14, 1.8, 8), night ? W.glowJet : W.jet, Math.cos(a) * r, 0.9, Math.sin(a) * r, g); jets.push(j); }
-        s.userData.wakers.push((w, t) => jets.forEach((j, i) => { const h = w * (0.4 + 0.6 * Math.abs(Math.sin(t * 1.8 + i))); j.scale.y = Math.max(0.01, h); j.position.y = 0.9 * h; }));
+        s.userData.always.push((w, t) => jets.forEach((j, i) => { const h = w * (0.4 + 0.6 * Math.abs(Math.sin(t * 1.8 + i))); j.scale.y = Math.max(0.01, h); j.position.y = 0.9 * h; }));
         for (const [bx, col] of [[-3.0, 0xff7a59], [3.0, 0x7ed957]]) { M(cyl(0.16, 0.2, 1.3, 10), mat(col, { rough: 0.4 }), bx, 0.65, -2.2, g, true); M(sph(0.26, 10), mat(col, { rough: 0.4 }), bx, 1.4, -2.2, g); }
         self.visitor(g, s, 11 + k, -0.9, 0.6, 0.5, 'splash', { kid: true });
         self.visitor(g, s, 12 + k, 1.1, -0.4, -0.8, 'splash', { kid: true });
@@ -880,7 +936,7 @@ void main() {
         M(cyl(1.0, 0.6, 0.25, 18), mat(0xb7ab96, { rough: 0.7 }), 0, 1.45, 0, g, true);
         const jet = M(cyl(0.06, 0.2, 1.6, 10), night ? W.glowJet : W.jet, 0, 2.3, 0, g);
         const ring = M(cyl(0.95, 1.25, 0.9, 18, ), W.sheet, 0, 1.0, 0, g);
-        s.userData.wakers.push((w, t) => { jet.scale.y = Math.max(0.01, w * (0.85 + 0.15 * Math.sin(t * 5))); jet.position.y = 1.55 + 0.8 * jet.scale.y; ring.scale.y = Math.max(0.01, w); pool.position.y = 0.3 + 0.2 * w; });
+        s.userData.always.push((w, t) => { jet.scale.y = Math.max(0.01, w * (0.85 + 0.15 * Math.sin(t * 5))); jet.position.y = 1.55 + 0.8 * jet.scale.y; ring.scale.y = Math.max(0.01, w); pool.position.y = 0.3 + 0.2 * w; });
         for (let i = 0; i < 3; i++) { const a = (i / 3) * TAU + k; self.visitor(g, s, 101 + k + i, Math.cos(a) * 2.75, Math.sin(a) * 2.75, -a + Math.PI / 2, 'sit', { seat: 0.55, kid: i === 2, optional: i === 2 }); }
         self.lamp(g, 4, -4, night); self.lamp(g, -4, 4, night);
       },
@@ -959,7 +1015,7 @@ void main() {
             M(box(4.2, hgt, 4.8), mat(0x3a3e44, { rough: 0.4 }), sx * 7.2, hgt / 2 - 0.2, z, s, true);
             const pool = flat(plane(3.8, 4.4), W.pool, sx * 7.2, hgt - 0.18, z, s);
             const lip = M(plane(3.8, Math.max(0.2, hgt - 0.1)), W.sheet, sx * 7.2, (hgt - 0.2) / 2, z + 2.42, s);
-            s.userData.wakers.push((w) => { pool.position.y = hgt - 0.6 + 0.42 * w; lip.scale.y = Math.max(0.01, w); });
+            s.userData.wakers.push((w) => { const ws = Math.max(0, Math.min(1, w * 2.2 - step * 0.22)); pool.position.y = hgt - 0.6 + 0.42 * ws; lip.scale.y = Math.max(0.01, ws); lip.visible = ws > 0.02; });
           }
           for (let i = 0; i < 3; i++) { const z = -10 + i * 10; M(box(1.6, 0.6, 1.6), mat(0xd8d4c8), sx * 11.2, 0.3, z, s, true); self.tree(s, sx * 11.2, z, 0.9, info.k * 3 + i + (sx > 0 ? 50 : 0)); }
         }
@@ -986,6 +1042,10 @@ void main() {
           for (let i = 0; i < 5; i++) { const b = M(ico(0.7 + (i % 3) * 0.25, 0), mat([0xb98a5e, 0xa5764c, 0xc9a07a][i % 3], { rough: 0.9, flat: true }), sx * (15.2 - (i % 2) * 0.6), -0.6, -12 + i * 6, s, true); b.rotation.set(i, i * 2, 0); }
         }
         const pond = flat(plane(32, SEG_LEN), W.pond, 0, -1.6, 0, s);
+        for (const [ax, az] of [[-10, -6], [10, 7]]) {
+          const jet = M(cyl(0.12, 0.45, 4, 12), W.jet, ax, -1, az, s); const ph = ax;
+          s.userData.wakers.push((w, t) => { const k = w * (0.85 + 0.15 * Math.sin(t * 4 + ph)); jet.scale.y = Math.max(0.01, k); jet.position.y = -1.0 + 2 * k; jet.visible = w > 0.02; });
+        }
         flat(plane(32, SEG_LEN), mat(0x3d5a4a, { rough: 1 }), 0, -2.6, 0, s);
         s.userData.wakers.push((w) => { pond.position.y = -2.4 + 0.8 * w; });
         if (info.k % 2 === 0) for (let i = 0; i < 5; i++) { const x = -7 - i * 1.6, z = -6 + i * 2.2; M(cyl(0.6, 0.7, 0.4, 7), mat(0xb98a5e, { rough: 0.9, flat: true }), x, -1.25, z, s); if (i === 2 || i === 4) self.visitor(s, s, 300 + info.k + i, x, z, 0.5, 'wave', { y: -1.05, kid: true }); }
@@ -1115,6 +1175,11 @@ void main() {
         o.on = k >= 0.5;
       });
       o.y0 = 0; o.y1 = 4; o.hw = 0.6; o.hd = 0.6;
+    } else if (type === 'walker') { // a pedestrian walking toward Drip along the path: go around them
+      const p = person(mulberry(Math.floor(z * 7 + lane * 13 + this.t * 100)), this.rand() < 0.25);
+      g.add(p); o.person = p; o.walkV = 1.2 + this.rand() * 0.6;
+      o.anims.push((t) => animPerson(p, t, 'walk', 1));
+      o.y0 = 0; o.y1 = 1.8; o.hw = 0.45; o.hd = 0.35;
     }
     this.world.add(g); this.objs.push(o);
     return o;
@@ -1148,7 +1213,8 @@ void main() {
     const t = this.t, lv = Math.min(1, t / 70), zone = zoneAt(this.dist - SPAWN_Z), R = this.rand;
     const lanes = [-1, 0, 1];
     const pickType = () => {
-      const opts = [['low', 3], ['block', 3], ['high', t > 5 ? 2.5 : 0], ['grate', t > 10 ? 1.6 : 0], ['jet', t > 25 ? 1.5 : 0]];
+      const walkers = zone.id === 'aggie' ? 3.5 : zone.id === 'chase' ? 2 : 0;
+      const opts = [['low', 3], ['block', zone.id === 'aggie' ? 1.2 : 3], ['high', t > 5 ? 2.5 : 0], ['grate', t > 10 ? 1.6 : 0], ['jet', t > 25 ? 1.5 : 0], ['walker', walkers]];
       let sum = opts.reduce((a, b) => a + b[1], 0), r = R() * sum;
       for (const [k, w] of opts) { if ((r -= w) <= 0) return k; }
       return 'low';
@@ -1156,7 +1222,9 @@ void main() {
     let n = R() < 0.55 - lv * 0.35 ? 1 : 2;
     if (lv > 0.5 && R() < 0.25) n = 3;
     const near = lanes.filter((l) => Math.abs(l - this.lastFree) <= 1);
-    const free = near[Math.floor(R() * near.length)];
+    let free = near[Math.floor(R() * near.length)];
+    // never block a supply inlet: its lane is the free lane for any row spawned near it
+    for (const sg of this.segs) { const inl = sg.userData.inlet; if (inl && inl.state === 'idle' && Math.abs(sg.position.z + inl.z - SPAWN_Z) < 10) { free = inl.lane; if (n === 3) n = 2; } }
     const used = lanes.filter((l) => l !== free).sort(() => R() - 0.5).slice(0, Math.min(2, n));
     const types = used.map(() => pickType());
     if (n === 3) {
@@ -1213,6 +1281,7 @@ void main() {
     const dz = this.speed * dt;
     this.dist += dz;
     for (const k of ['magnet', 'mult', 'boost', 'stumble', 'inv']) this[k] = Math.max(0, this[k] - dt);
+    this.water = Math.max(0, this.water - RULES.EVAPORATE * dt);
 
     for (const s of this.segs) {
       s.position.z += dz;
@@ -1239,7 +1308,7 @@ void main() {
 
     const ph = this.slideT > 0 ? SLIDE_H : STAND_H;
     for (const o of this.objs) {
-      o.z += dz; o.g.position.z = o.z;
+      o.z += dz + (o.walkV ? o.walkV * dt : 0); o.g.position.z = o.z;
       if (o.kind === 'obs') {
         if (o.hit || Math.abs(o.z) > o.hd + 0.35) continue;
         if (Math.abs(o.g.position.x - this.px) > o.hw + 0.36) continue;
@@ -1260,6 +1329,13 @@ void main() {
       if (o.dead || o.z > KILL_Z) { this.world.remove(o.g); return false; }
       return true;
     });
+    // supply inlets: run through one to deliver water
+    for (const sg of this.segs) {
+      const inl = sg.userData.inlet; if (!inl || inl.state !== 'idle') continue;
+      const wz = sg.position.z + inl.z;
+      if (Math.abs(wz) < 0.9 && Math.abs(this.px - inl.x) < 0.95 && this.py < 1.6) this.deliver(sg, inl);
+      else if (wz > 1.4) { inl.state = 'missed'; inl.glow.material = cachedMat('inlet-dry', () => new THREE.MeshStandardMaterial({ color: 0x5a6068, roughness: 0.6 })); this.hooks.onMissed?.(inl.zone); }
+    }
     this.score = Math.floor(this.dist) + this.bonus;
   }
 
@@ -1284,10 +1360,10 @@ void main() {
   collect(o) {
     o.dead = true;
     const m = this.mult > 0 ? RULES.MULT : 1;
-    if (o.kind === 'drop') { this.drops++; this.bonus += RULES.DROP * m; this.combo++; this.happy = 0.35; sfx.drop(Math.min(8, this.combo % 9)); }
-    else if (o.kind === 'valve') { this.valves++; this.bonus += RULES.VALVE * m; this.happy = 0.8; sfx.valve(); this.hooks.onPop?.(`+${RULES.VALVE * m} Golden valve`); }
+    if (o.kind === 'drop') { this.drops++; this.bonus += RULES.DROP * m; this.combo++; this.water = Math.min(RULES.TANK_MAX, this.water + RULES.DROP_WATER); this.happy = 0.35; sfx.drop(Math.min(8, this.combo % 9)); }
+    else if (o.kind === 'valve') { this.valves++; this.bonus += RULES.VALVE * m; this.water = Math.min(RULES.TANK_MAX, this.water + RULES.VALVE_WATER); this.happy = 0.8; sfx.valve(); this.hooks.onPop?.(`+${RULES.VALVE * m} Golden valve`); }
     else {
-      this.powerups++; this.bonus += RULES.POWERUP; const p = POWERS[o.power]; this.happy = 0.8;
+      this.powerups++; this.bonus += RULES.POWERUP; this.water = Math.min(RULES.TANK_MAX, this.water + RULES.POWER_WATER); const p = POWERS[o.power]; this.happy = 0.8;
       if (o.power === 'shield') this.shield = true; else this[o.power] = p.dur;
       sfx.power(); this.hooks.onPop?.(`${p.label}: ${p.note}`);
     }
@@ -1302,7 +1378,7 @@ void main() {
   }
   result(cause) {
     const stop = this.arrived ? ZONES.length : Math.min(ZONES.length, Math.floor(this.dist / ZONE_LEN) + 1);
-    return { score: this.score, durationMs: Math.round(this.t * 1000), distance: Math.floor(this.dist), drops: this.drops, valves: this.valves, powerups: this.powerups, zones: [...this.zonesSeen], arrived: this.arrived, laps: this.lap, stop, cause };
+    return { score: this.score, durationMs: Math.round(this.t * 1000), distance: Math.floor(this.dist), drops: this.drops, valves: this.valves, powerups: this.powerups, deliveries: this.deliveries, stopsDone: this.stopsDone, zones: [...this.zonesSeen], arrived: this.arrived, laps: this.lap, stop, cause };
   }
 
   // ------------------------------------------------ visuals
@@ -1453,12 +1529,14 @@ void main() {
       const nearSeg = s.position.z > -88;
       if (u.detailOn !== nearSeg) { u.detailOn = nearSeg; for (const o of u.detail || []) o.visible = nearSeg; }
       if (nearSeg) for (const a of u.anims) a(t);
-      if (s.position.z > -55 && u.wake < 1) {
-        if (!u.woke) { u.woke = true; if (running && u.wakers.length > 2) sfx.sparkle?.(); }
-        u.wake = Math.min(1, u.wake + dt * 0.9);
-      }
+      // project water features run only when a delivery has supplied this section; park scenes are always on
+      const supplied = this.state === 'idle' || u.info.k < 0 || this.powered.has(u.info.index);
+      if (supplied && u.wake < 1) { if (!u.woke) { u.woke = true; u.poweredAt = t; } u.wake = Math.min(1, u.wake + dt * 1.4); }
       if (this.state === 'idle') u.wake = 1;
-      for (const w of u.wakers) w(u.wake, t);
+      if (s.position.z > -60 && u.aw < 1) u.aw = Math.min(1, u.aw + dt * 0.9);
+      if (this.state === 'idle') u.aw = 1;
+      if (nearSeg || u.wake < 1) for (const w of u.wakers) w(u.wake, t);
+      for (const w of u.always) w(u.aw, t);
       if (u.boards.length) { const bz = s.position.z + u.boardZ; if (bz > -75 && bz < 4) this.nearProject = u.project; }
     }
     for (const o of this.objs) {
@@ -1506,7 +1584,8 @@ void main() {
     u.rig.scale.set(sxz, sy, sxz);
     u.rig.position.y = running && !air && !sliding ? Math.abs(Math.sin(stride)) * 0.08 : 0;
     const laneDelta = this.lane * LANE - this.px;
-    u.rig.rotation.z = laneDelta * -0.14;
+    u.rig.rotation.z = Math.max(-0.35, Math.min(0.35, laneDelta * -0.22));
+    if (Math.abs(laneDelta) > 0.15) { u.rig.scale.x *= 1 + Math.min(0.12, Math.abs(laneDelta) * 0.06); if (!air) u.rig.position.y += Math.min(0.12, Math.abs(laneDelta) * 0.05); if (running && Math.random() < 0.5) this.splash(this.px - Math.sign(laneDelta) * 0.3, 0.1, 0.2, 1); }
     const face = this.dead ? Math.PI : (this.state === 'playing' || this.state === 'countdown' && this.resumeCount ? 0 : Math.PI);
     p.rotation.y += (face + (this.dead ? Math.sin(t * 20) * 0.3 : 0) - p.rotation.y) * Math.min(1, dt * 6);
     if (this.dead) u.rig.rotation.x = Math.min(1.2, this.deathT * 3);
@@ -1529,10 +1608,10 @@ void main() {
 
     // ---- camera: intro swoop from the water tower, then a chase cam with a little bob and a boost kick
     const cam = this.camera, portrait = this.portrait;
-    const cx = this.px * (portrait ? 0.35 : 0.55);
-    const cy = (portrait ? 4.4 : 3.7) + this.py * 0.25 + (running ? Math.sin(stride * 2) * 0.03 : 0);
+    const cx = this.px * 0.35;   // the camera slides with Drip (no rotation), so the world never tilts
+    const cy = (portrait ? 4.4 : 3.7) + this.py * 0.2;
     const cz = portrait ? 8.0 : 7.0;
-    const fov = (portrait ? 74 : 60) + Math.min(4, Math.max(0, (this.speed - RULES.START_SPEED) * 0.25)) * (running ? 1 : 0) + (this.boost > 0 ? 8 : 0);
+    const fov = portrait ? 74 : 60;
     if (Math.abs(cam.fov - fov) > 0.05) { cam.fov += (fov - cam.fov) * Math.min(1, dt * 4); cam.updateProjectionMatrix(); }
     if (this.state === 'idle' || this.state === 'over') {
       const off = portrait ? 0 : 2.6;
@@ -1545,11 +1624,10 @@ void main() {
       cam.lookAt(this.px * 0.4 * e, 0.9 + (1 - e) * 4, -10 * e + (1 - e) * 12);
       return;
     }
-    cam.position.x += (cx - cam.position.x) * Math.min(1, dt * 8);
+    cam.position.x += (cx - cam.position.x) * Math.min(1, dt * 5);
     cam.position.y += (cy - cam.position.y) * Math.min(1, dt * 6);
     cam.position.z += (cz - cam.position.z) * Math.min(1, dt * 6);
-    if (this.dead && !REDUCED) cam.position.x += Math.sin(t * 50) * 0.08 * Math.max(0, 0.5 - this.deathT);
-    cam.lookAt(this.px * 0.4, 0.9, -10);
-    if (!REDUCED) cam.rotateZ(-laneDelta * 0.03);   // a gentle roll into lane changes
+    if (this.dead && !REDUCED) cam.position.y += Math.sin(t * 50) * 0.05 * Math.max(0, 0.5 - this.deathT);
+    cam.lookAt(cam.position.x, 0.9, -10);   // look straight ahead from wherever the camera is: pure translation
   }
 }

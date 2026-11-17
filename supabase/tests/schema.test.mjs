@@ -220,6 +220,22 @@ await asAdmin(); await q(`delete from runs where status = 'started'`); await asA
   const x = (await q(`select submit_run($1,$2,500,20000,400,0,0) r`, [t.run_id, gus.player_key]))[0].r;
   ok(!x.accepted, 'Water Run ticket can\'t post a Drip Dash score');
 }
+// water deliveries: 3 inlets per 300 m stop (150 each) + 300 per completed stop
+await asAdmin(); await q(`delete from runs where status = 'started'`); await asAnon();
+async function wrun2(key, secs, score, dist, drops, valves, pups, dels, stops) {
+  const t = (await q(`select start_run($1, 'WRUN') r`, [key]))[0].r;
+  await asAdmin(); await q(`update runs set started_at = now() - make_interval(secs => $1) where id = $2`, [secs + 1, t.run_id]); await asAnon();
+  return (await q(`select submit_water_run($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) r`, [t.run_id, key, score, Math.round(secs * 1000), dist, drops, valves, pups, dels, stops]))[0].r;
+}
+r = await wrun2(gus.player_key, 60, 1200 + 400 + 9 * 150 + 3 * 300, 1200, 40, 0, 0, 9, 3);
+ok(r.accepted, `wrun: deliveries + completed stops accepted (${r.reason})`);
+r = await wrun2(gus.player_key, 30, 600 + 40 * 150, 600, 0, 0, 0, 40, 0);
+ok(!r.accepted && /deliveries/.test(r.reason), `wrun: impossible deliveries rejected (${r.reason})`);
+await asAdmin(); await q(`delete from runs where status = 'started'`); await asAnon();
+r = await wrun2(gus.player_key, 30, 600 + 2 * 150 + 2 * 300, 600, 0, 0, 0, 2, 2);
+ok(!r.accepted && /stops/.test(r.reason), `wrun: stops without 3 deliveries each rejected (${r.reason})`);
+r = await wrun2(gus.player_key, 30, 600 + 3 * 150 + 5000, 600, 0, 0, 0, 3, 1);
+ok(!r.accepted && /bonus/.test(r.reason), `wrun: inflated delivery score rejected (${r.reason})`);
 const wlb = await q(`select * from get_leaderboard('month', null, 10, 'wrun')`);
 ok(wlb.length === 1 && wlb[0].display_name === 'Gus' && Number(wlb[0].score) === 3954, 'wrun board only has Water Run players ' + JSON.stringify(wlb.map((x) => [x.display_name, Number(x.score)])));
 ok(!(await q(`select * from get_leaderboard('month', null, 10)`)).some((x) => x.display_name === 'Gus'), 'Drip Dash board excludes Water Run scores');

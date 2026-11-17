@@ -13,7 +13,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Zilla+Slab:ital,wght@0,700;1,700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="../css/style.css?v=wr10">
+  <link rel="stylesheet" href="../css/style.css?v=wr14">
   <script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.min.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }</script>
 </head>
 <body class="game-page run-page">
@@ -28,6 +28,21 @@
     <div id="journey" hidden aria-label="Journey progress"><div class="jr-track"><div class="jr-fill" id="jr-fill"></div></div><div class="jr-stops" id="jr-stops"></div><span class="jr-label" id="jr-label"></span></div>
     <button id="proj-chip" hidden><span class="pc-i">ⓘ</span><span><small>inCon-trol project nearby: tap the sign or here</small><b id="pc-name"></b></span></button>
     <div id="zone-banner" hidden><small>Now entering</small><b id="zb-name"></b><span id="zb-ref"></span></div>
+    <!-- water tank + this stop's supply mission -->
+    <div id="mission" hidden>
+      <div class="ms-tank"><span class="ms-ico">💧</span><div class="ms-bar"><div class="ms-fill" id="ms-fill"></div><div class="ms-cost"></div></div><b id="ms-pct">45%</b></div>
+      <div class="ms-goal"><span id="ms-text">Supply the splash pad</span><span class="ms-pips" id="ms-pips"></span></div>
+    </div>
+    <!-- compact stop card: shown for ~4 s when entering a project, tap × to dismiss -->
+    <aside id="stop-card" hidden aria-live="polite">
+      <button id="sc-close" aria-label="Dismiss">×</button>
+      <small id="sc-kicker"></small>
+      <b id="sc-name"></b>
+      <span id="sc-loc"></span>
+      <p id="sc-blurb"></p>
+      <p class="sc-mission" id="sc-mission"></p>
+      <i class="sc-timer"></i>
+    </aside>
     <div id="countdown" hidden></div>
     <div id="pop" hidden></div>
 
@@ -67,6 +82,8 @@
           <li><b>Jump:</b> <kbd>↑</kbd> / <kbd>W</kbd> / <kbd>Space</kbd>, swipe up, or tap/click the middle. Clears low pipes, weir walls and spraying drain grates.</li>
           <li><b>Slide:</b> <kbd>↓</kbd> / <kbd>S</kbd> or swipe down. Gets you under water arches and beams.</li>
           <li>Fountain basins and water walls fill the lane: <b>switch lanes</b>. Geysers flash red before they erupt.</li>
+          <li><b>Your mission: deliver water.</b> Drops fill Drip's water tank (it slowly evaporates). Each stop has <b>3 glowing supply inlets</b>: run through one with at least 35% water to switch on the project's fountains ahead (+150). Supply all 3 to complete the stop (+300). Skipped sections stay dry.</li>
+          <li>At Aggie Park and downtown, <b>people walk along the path</b>: change lanes to go around them.</li>
           <li>Clip the side of something and Drip bounces back once. A second bump within 4 s ends the run.</li>
           <li><b>Drops</b> +10, <b>golden valves</b> +100. Power-ups: <b>Pressure Regulator</b> (shield), <b>Smart Controller</b> (drop magnet), <b>Flow Meter</b> (x2 points), <b>Jet Boost</b> (super speed, smash through anything).</li>
           <li><b>The journey:</b> 8 stops, each a real inCon-trol project, from sunrise at Melissa Lake Park to the evening show at Commons at Agora (2,400 m). Fountains come back to life as you pass them. Make it to Agora, then keep going for a high score!</li>
@@ -179,6 +196,6 @@
 
     <div id="toast" role="status" hidden></div>
   </main>
-  <script type="module" src="../js/run-main.js?v=wr10"></script>
+  <script type="module" src="../js/run-main.js?v=wr14"></script>
 </body>
 </html>
