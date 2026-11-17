@@ -5,7 +5,7 @@ Four browser games share one site (the Drip Dash portal), one sign-up and one ba
 | Game | Where | What it is | Leaderboard |
 |---|---|---|---|
 | **Drip Dash** (main game) | `/` | One-tap endless runner: Drip races through turf fields, a pump station and a fountain plaza, dodging sprinklers, valve boxes, standpipes, low main lines and geysers | Best single run per player |
-| **Water Run** (3D) | `/run/` | Three-lane 3D runner (Three.js) through five zones inspired by inCon-trol gallery projects: Melissa Lake Park Splash Pad, 3300 Olympus Drive, The Epic East, a downtown bridge with Chase Tower, and illuminated fountains | Best single run per player |
+| **Water Run** (3D) | `/run/` | Three-lane 3D runner (Three.js) along the Water Trail: Drip races from Melissa Lake Park to Commons at Agora through eight real inCon-trol gallery projects, waking the fountains, with branded billboards and clickable project signs | Best single run per player |
 | **Bring Back the Flow** | `/flow/` | 7-level story adventure: restore Wellbrook's water systems by operating valves, pumps, VFDs, zones, a rain diverter, a water tower and a fountain show | Valley Score (best score on each level, added up) |
 | **Splash Escape** | `/splash/` | 30–90 s arcade survival on a circular splash pad: Spritz dodges falling drops, geysers, the rotating Big Fountain, jets, drains, fountain carts, sprinklers and splash waves | Best single run per player |
 
@@ -44,7 +44,8 @@ site/
   js/flow-main.js       Flow screens
   run/index.html        Water Run (3D): title, how-to, register, game over, leaderboard
   js/run-game.js        Water Run engine: Three.js world, zones, obstacles, Drip in 3D
-  js/run-main.js        Water Run screens, swipe/keyboard/click controls
+  js/run-main.js        Water Run screens, swipe/keyboard/click controls, project panels
+  js/run-projects.js    Water Trail project list (verified gallery info) and photo sources
   splash/index.html     Splash Escape: title, how-to, achievements, register, game over, leaderboard
   js/splash-game.js     Splash Escape engine, arena art and Spritz the mascot
   js/splash-main.js     Splash Escape screens and controls

@@ -3,9 +3,10 @@ import { api, store, currentMonth, monthLabel } from './api.js';
 import { LIVE } from './config.js';
 import { sfx } from './audio.js';
 import { mountBoard } from './board.js';
+import { PROJECTS, photoSources } from './run-projects.js';
 
 const $ = (s) => document.querySelector(s);
-const screens = ['title', 'howto', 'register', 'over', 'board', 'pause', 'nogl'];
+const screens = ['title', 'howto', 'register', 'over', 'board', 'pause', 'nogl', 'project', 'collection'];
 const params = new URLSearchParams(location.search);
 
 let player = store.get('dripdash.player');       // shared sign-up across every Drip Dash game
@@ -17,7 +18,9 @@ function show(name) {
   const playing = name === null;
   $('#hud-buttons').hidden = !playing;
   $('#run-hud').hidden = !playing;
-  if (name && !['board', 'howto'].includes(name)) lastScreen = name;
+  $('#journey').hidden = !playing;
+  if (!playing) $('#proj-chip').hidden = true;
+  if (name && !['board', 'howto', 'project', 'collection'].includes(name)) lastScreen = name;
 }
 function toast(msg, ms = 2400) {
   const t = $('#toast'); t.textContent = msg; t.hidden = false;
@@ -27,9 +30,11 @@ function pop(msg) {
   const p = $('#pop'); p.textContent = msg; p.hidden = false; p.classList.remove('go'); void p.offsetWidth; p.classList.add('go');
   clearTimeout(pop.h); pop.h = setTimeout(() => (p.hidden = true), 1600);
 }
-function zoneBanner(zone) {
+function zoneBanner(zone, lap = 0) {
   const b = $('#zone-banner');
-  $('#zb-name').textContent = zone.name; $('#zb-ref').textContent = `Inspired by ${zone.ref}`;
+  const last = zone.idx === PROJECTS.length - 1;
+  b.querySelector('small').textContent = `${lap ? 'Encore lap · ' : ''}${last ? 'Destination' : `Stop ${zone.idx + 1} of ${PROJECTS.length}`} · ${zone.time}`;
+  $('#zb-name').textContent = zone.name; $('#zb-ref').textContent = zone.story;
   b.hidden = false; b.classList.remove('go'); void b.offsetWidth; b.classList.add('go');
   clearTimeout(zoneBanner.h); zoneBanner.h = setTimeout(() => (b.hidden = true), 3200);
 }
@@ -43,14 +48,16 @@ async function boot() {
     ZONES = mod.ZONES;
     game = new mod.WaterRun($('#game'), {
       onGameOver: (r) => onGameOver(r),
-      onZone: (z, first) => { if (!first) zoneBanner(z); },
+      onZone: (z, first) => { if (!first) zoneBanner(z, game.lap); },
+      onArrive: () => { celebrate(); },
       onToast: (m) => toast(m),
       onPop: (m) => pop(m),
       onCountdown: (c) => { const el = $('#countdown'); el.hidden = c <= 0; el.textContent = c > 0 ? Math.ceil(c) : ''; },
     });
     game.setOutfit(store.get('dripdash.outfit', 'none'));
     window.__wrun = game;   // for testing in the console
-    $('#zone-list').innerHTML = `<b>5 places, inspired by real inCon-trol projects:</b><br>${ZONES.map((z) => z.name).join(' · ')}`;
+    $('#zone-list').innerHTML = `<b>8 stops, all real inCon-trol projects:</b><br>${ZONES.map((z) => z.short).join(' → ')}`;
+    $('#jr-stops').innerHTML = ZONES.map((z, i) => `<span style="left:${(i / ZONES.length) * 100}%" title="${z.name}">${i === ZONES.length - 1 ? '⛲' : ''}</span>`).join('') + '<span class="jr-drip" id="jr-drip">💧</span>';
     requestAnimationFrame(hud);
   } catch (e) {
     console.warn('Water Run could not start 3D:', e);
@@ -72,6 +79,15 @@ function hud() {
     if (game.stumble > 0) chips.push('<span class="pw warn">⚠ Careful</span>');
     const html = chips.join('');
     if (hud.last !== html) { $('#h-powers').innerHTML = html; hud.last = html; }
+    // journey progress to Commons at Agora
+    const J = ZONES.length * 300, d = game.dist % J, k = Math.min(1, d / J);
+    $('#jr-fill').style.width = `${k * 100}%`; $('#jr-drip').style.left = `${k * 100}%`;
+    const left = Math.max(0, Math.ceil((J - d) / 10) * 10);
+    $('#jr-label').textContent = game.lap > 0 ? `Encore lap ${game.lap} · ${game.zone.short}` : game.arrived ? 'Commons at Agora: show is ON!' : `${game.zone.short} · ${left.toLocaleString()} m to Commons at Agora`;
+    // nearby project sign
+    const np = game.state === 'playing' ? game.nearProject : null;
+    if (np) { $('#pc-name').textContent = np.name; }
+    $('#proj-chip').hidden = !np;
   }
   requestAnimationFrame(hud);
 }
@@ -164,7 +180,12 @@ async function onGameOver(r) {
     <li><b>${r.drops}</b><span>drops</span></li>
     <li><b>${r.valves}</b><span>golden valves</span></li>
     <li><b>${(r.durationMs / 1000).toFixed(0)}s</b><span>run time</span></li>`;
-  $('#over-zones').innerHTML = `<small>Places you ran through</small>${ZONES.map((z) => `<span class="${r.zones.includes(z.id) ? 'on' : ''}" title="Inspired by ${z.ref}">${r.zones.includes(z.id) ? '✔' : '🔒'} ${z.name}</span>`).join('')}`;
+  $('#over-journey').innerHTML = r.arrived
+    ? `⛲ <b>You reached Commons at Agora</b> and switched on the evening show!${r.laps ? ` Plus ${r.laps} encore lap${r.laps > 1 ? 's' : ''}.` : ''}`
+    : `You made it to <b>stop ${r.stop} of 8: ${ZONES[r.stop - 1].short}</b>. ${Math.max(0, 2400 - r.distance).toLocaleString()} m short of Commons at Agora.`;
+  if (r.arrived) store.set('wrun.arrived', (store.get('wrun.arrived', 0) || 0) + 1);
+  $('#over-zones').innerHTML = `<small>Stops reached · tap one to read about the project</small>${ZONES.map((z) => `<button class="${r.zones.includes(z.id) ? 'on' : ''}" data-proj="${z.id}">${r.zones.includes(z.id) ? '✔' : '○'} ${z.short}</button>`).join('')}`;
+  $('#over-zones').querySelectorAll('[data-proj]').forEach((b) => (b.onclick = () => openProject(b.dataset.proj, false)));
   $('#over-rank').textContent = '';
   $('#btn-save').hidden = true;
   show('over');
@@ -206,6 +227,54 @@ $('#btn-share').onclick = async () => {
   } catch { /* cancelled */ }
 };
 
+// ---------------------------------------------------------------- project information panels (verified gallery info only)
+let projectFromRun = false;
+function openProject(id, fromRun) {
+  const p = PROJECTS.find((x) => x.id === id); if (!p) return;
+  projectFromRun = !!fromRun;
+  if (fromRun && game) game.pause();
+  const found = new Set(store.get('wrun.projects', [])); found.add(id); store.set('wrun.projects', [...found]); renderCount();
+  const i = PROJECTS.indexOf(p);
+  $('#pj-stop').textContent = i === PROJECTS.length - 1 ? 'Destination' : `Stop ${i + 1} of ${PROJECTS.length}`;
+  $('#pj-name').textContent = p.name;
+  const img = $('#pj-img'), srcs = photoSources(p, 1200); let k = 0;
+  $('#pj-noimg').hidden = true; img.hidden = false; img.alt = `${p.name} (inCon-trol gallery photo)`;
+  img.onerror = () => { k++; if (k < srcs.length) img.src = srcs[k]; else { img.hidden = true; $('#pj-noimg').hidden = false; } };
+  img.src = srcs[0];
+  const facts = [['Project', p.name]];
+  if (p.location) facts.push(['Location', p.location]);
+  if (p.summary) facts.push(['About', p.summary]);
+  facts.push(['In the photo', p.seen]);
+  facts.push(['Architect / designer', 'Not listed in the inCon-trol gallery']);
+  facts.push(['Listed in', 'inCon-trol Water Systems project gallery']);
+  $('#pj-facts').innerHTML = facts.map(([k2, v]) => `<dt>${k2}</dt><dd>${v}</dd>`).join('');
+  $('#pj-close').textContent = fromRun ? 'Resume run' : 'Back';
+  show('project');
+  if (fromRun) { $('#hud-buttons').hidden = true; }
+  sfx.click?.();
+}
+$('#pj-close').onclick = () => {
+  if (projectFromRun && game && game.state === 'paused') { show(null); game.resume(1.5); }
+  else show(lastScreen);
+};
+function renderCount() { $('#proj-count').textContent = new Set(store.get('wrun.projects', [])).size; }
+function openCollection() {
+  const found = new Set(store.get('wrun.projects', []));
+  $('#trail-list').innerHTML = PROJECTS.map((p, i) => `<li class="${found.has(p.id) ? 'got' : ''}"><button data-proj="${p.id}"><span class="tl-n">${i === PROJECTS.length - 1 ? '⛲' : i + 1}</span><span><b>${p.name}</b><small>${found.has(p.id) ? 'Discovered' : 'Not discovered yet (tap to preview)'}</small></span></button></li>`).join('');
+  $('#trail-list').querySelectorAll('[data-proj]').forEach((b) => (b.onclick = () => openProject(b.dataset.proj, false)));
+  show('collection');
+}
+$('#btn-projects').onclick = openCollection;
+$('#proj-chip').onclick = (e) => { e.stopPropagation(); if (game?.nearProject && game.state === 'playing') openProject(game.nearProject.id, true); };
+function celebrate() {
+  const b = $('#zone-banner');
+  b.querySelector('small').textContent = 'You made it!';
+  $('#zb-name').textContent = 'The show is ON ⛲';
+  $('#zb-ref').textContent = 'Commons at Agora is lit up. Keep running: every metre still scores!';
+  b.hidden = false; b.classList.remove('go'); void b.offsetWidth; b.classList.add('go');
+  clearTimeout(zoneBanner.h); zoneBanner.h = setTimeout(() => (b.hidden = true), 3600);
+}
+
 // ---------------------------------------------------------------- leaderboard overlay
 let board = null;
 function openBoard() {
@@ -237,6 +306,8 @@ const playing = () => game && game.state === 'playing';
 stage.addEventListener('pointerdown', (e) => {
   if (!playing() || e.target.closest('button, a, input, .card')) return;
   e.preventDefault();
+  const proj = game.pick(e.clientX, e.clientY);
+  if (proj) { sw = null; openProject(proj.id, true); return; }
   sw = { x: e.clientX, y: e.clientY, t: performance.now(), id: e.pointerId, done: false };
 }, { passive: false });
 stage.addEventListener('pointermove', (e) => {
@@ -266,6 +337,9 @@ addEventListener('keydown', (e) => {
     else if (['ArrowUp', 'w', 'W', ' '].includes(k)) { e.preventDefault(); if (!e.repeat) game.jump(); }
     else if (['ArrowDown', 's', 'S'].includes(k)) { e.preventDefault(); if (!e.repeat) game.slide(); }
     else if (['p', 'P', 'Escape'].includes(k)) doPause();
+    else if (['i', 'I'].includes(k) && game.nearProject) openProject(game.nearProject.id, true);
+  } else if (!$('#screen-project').hidden && ['Escape', 'Enter', 'i', 'I'].includes(k)) {
+    e.preventDefault(); $('#pj-close').click();
   } else if (game && game.state === 'paused' && ['p', 'P', 'Escape', ' '].includes(k)) {
     e.preventDefault(); show(null); game.resume();
   } else if (!$('#screen-title').hidden || !$('#screen-over').hidden) {
@@ -277,6 +351,7 @@ document.addEventListener('visibilitychange', () => { if (document.hidden && gam
 $('#demo-badge').hidden = LIVE;
 if (params.get('email') && !player) prefill();
 renderTitle();
+renderCount();
 show('title');
 await boot();
 if (params.get('view') === 'leaderboard') openBoard();
@@ -287,6 +362,7 @@ if (game && params.has('dev') && params.get('d')) {
   const target = Number(params.get('d'));
   while (game.dist < target) { game.inv = 1; game.shield = false; game.step(1 / 120); }
   game.inv = 0; game.state = 'paused'; game.prev = 'playing';
+  game.applyLook(game.zone, 1); game.segs.forEach((sg) => { sg.userData.wake = 1; });
   if (params.has('jump')) { game.py = 1.2; }
   if (params.has('slide')) { game.slideT = 0.5; }
 }

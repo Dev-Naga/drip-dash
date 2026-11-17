@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
   <title>Water Run | Drip Dash by inCon-trol Water Systems</title>
-  <meta name="description" content="A 3D three-lane runner through splash parks, cascade plazas, koi courts, city bridges and fountain shows inspired by real inCon-trol projects.">
+  <meta name="description" content="Race Drip along the Water Trail: a 3D runner through eight real inCon-trol water-feature projects, from Melissa Lake Park to Commons at Agora.">
   <meta name="theme-color" content="#005695">
   <meta property="og:title" content="Drip Dash: Water Run by inCon-trol Water Systems">
   <meta property="og:description" content="Dash, jump and slide through real-world inCon-trol water features. Top this month's leaderboard!">
@@ -14,7 +14,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Zilla+Slab:ital,wght@0,700;1,700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="../css/style.css">
-  <script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.min.js" } }</script>
+  <script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.min.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }</script>
 </head>
 <body class="game-page run-page">
   <main id="stage">
@@ -25,6 +25,8 @@
       <div class="rh-drops">💧 <b id="h-drops">0</b> <span id="h-mult" hidden>x2</span></div>
       <div class="rh-powers" id="h-powers"></div>
     </div>
+    <div id="journey" hidden aria-label="Journey progress"><div class="jr-track"><div class="jr-fill" id="jr-fill"></div></div><div class="jr-stops" id="jr-stops"></div><span class="jr-label" id="jr-label"></span></div>
+    <button id="proj-chip" hidden><span class="pc-i">ⓘ</span><span><small>inCon-trol project nearby: tap the sign or here</small><b id="pc-name"></b></span></button>
     <div id="zone-banner" hidden><small>Now entering</small><b id="zb-name"></b><span id="zb-ref"></span></div>
     <div id="countdown" hidden></div>
     <div id="pop" hidden></div>
@@ -42,7 +44,8 @@
         <a class="brand" href="https://www.incontrolwatersystems.com" target="_blank" rel="noopener"><img src="../assets/logo-incontrol.png" alt="inCon-trol Water Systems" width="220"></a>
         <p class="kicker">Drip Dash</p>
         <h1>Water Run</h1>
-        <p class="tagline">Run the real places water works.</p>
+        <p class="tagline">Race the sunset along the Water Trail.</p>
+        <p class="story" id="story">The fountains on the Water Trail are running dry. Drip, the last drop out of Melissa Lake Park's tipping bucket, has until nightfall to reach <b>Commons at Agora</b> and switch on the evening show, waking every water feature on the way.</p>
         <p class="month-banner" id="month-banner"></p>
         <button id="btn-play" class="btn primary big">Play</button>
         <div class="row">
@@ -50,6 +53,7 @@
           <button id="btn-howto" class="btn">How to play</button>
         </div>
         <p class="zone-list" id="zone-list"></p>
+        <button id="btn-projects" class="btn link">📍 Projects discovered: <span id="proj-count">0</span>/8</button>
         <p id="player-chip" class="player-chip" hidden></p>
       </div>
     </section>
@@ -65,7 +69,9 @@
           <li>Fountain basins and water walls fill the lane: <b>switch lanes</b>. Geysers flash red before they erupt.</li>
           <li>Clip the side of something and Drip bounces back once. A second bump within 4 s ends the run.</li>
           <li><b>Drops</b> +10, <b>golden valves</b> +100. Power-ups: <b>Pressure Regulator</b> (shield), <b>Smart Controller</b> (drop magnet), <b>Flow Meter</b> (x2 points), <b>Jet Boost</b> (super speed, smash through anything).</li>
-          <li>Every 450 m you reach a new place inspired by a real inCon-trol project. Your outfit from Drip Dash comes with you!</li>
+          <li><b>The journey:</b> 8 stops, each a real inCon-trol project, from sunrise at Melissa Lake Park to the evening show at Commons at Agora (2,400 m). Fountains come back to life as you pass them. Make it to Agora, then keep going for a high score!</li>
+          <li><b>Project signs:</b> tap or click the glowing sign (or the ⓘ button, or press <kbd>I</kbd>) to pause and read about the project. Play resumes with a 3-2-1 count when you close it.</li>
+          <li>Your outfit from Drip Dash comes with you!</li>
         </ul>
         <button class="btn primary" data-back>Got it</button>
       </div>
@@ -101,6 +107,7 @@
         <p class="over-score" id="over-score">0</p>
         <p class="over-best" id="over-best"></p>
         <ul class="over-stats" id="over-stats"></ul>
+        <p class="over-journey" id="over-journey"></p>
         <div class="zones-reached" id="over-zones"></div>
         <p class="over-rank" id="over-rank"></p>
         <button id="btn-save" class="btn primary" hidden>Save this score</button>
@@ -135,6 +142,29 @@
         <button id="btn-resume" class="btn primary big">Resume</button>
         <button id="btn-quit" class="btn link">End run</button>
         <a class="btn link" href="../">← Back to Drip Dash</a>
+      </div>
+    </section>
+
+    <!-- PROJECT INFO -->
+    <section id="screen-project" class="screen" hidden aria-label="Project information">
+      <div class="card project-card">
+        <p class="pj-kicker">inCon-trol project · <span id="pj-stop"></span></p>
+        <h2 id="pj-name"></h2>
+        <div class="pj-photo"><img id="pj-img" alt="" referrerpolicy="no-referrer"><span id="pj-noimg" hidden>Photo couldn't load right now. See it in the gallery.</span></div>
+        <dl class="pj-facts" id="pj-facts"></dl>
+        <p class="pj-src">Source: <a href="https://incontrolwatersystems.com/gallery" target="_blank" rel="noopener">inCon-trol project gallery</a>. Only details published there are shown.</p>
+        <button id="pj-close" class="btn primary big">Resume run</button>
+        <div class="row"><a class="btn link" href="https://incontrolwatersystems.com/gallery" target="_blank" rel="noopener">Open the gallery ↗</a></div>
+      </div>
+    </section>
+
+    <!-- PROJECTS DISCOVERED -->
+    <section id="screen-collection" class="screen" hidden aria-label="Projects discovered">
+      <div class="card board-card">
+        <h2>📍 The Water Trail</h2>
+        <p class="muted small">Tap a project sign during a run to add it here. Tap a project to read about it.</p>
+        <ol class="trail-list" id="trail-list"></ol>
+        <button class="btn primary" data-back>Back</button>
       </div>
     </section>
 

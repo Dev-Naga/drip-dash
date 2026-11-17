@@ -2,109 +2,108 @@
 
 **Play:** https://dev-naga.github.io/drip-dash/run/ · **Leaderboard:** https://dev-naga.github.io/drip-dash/leaderboard.html?game=wrun
 
-Water Run is a 3D, three-lane endless runner and the newest game in the Drip Dash portal. Drip, the same mascot as the original runner, dashes through five places inspired by real projects from the [inCon-trol gallery](https://incontrolwatersystems.com/gallery).
+Water Run is a 3D, three-lane runner in the Drip Dash portal. Players run Drip along **the Water Trail**: eight real projects from the [inCon-trol gallery](https://incontrolwatersystems.com/gallery), in a row, from sunrise to evening.
 
-## The portal
-Four games live on one site, with one sign-up and one leaderboard system.
+## Story
+> The fountains on the Water Trail are running dry. Drip, the last drop out of Melissa Lake Park's tipping bucket, has until nightfall to reach **Commons at Agora** and switch on the evening show, waking every water feature on the way.
 
-| Game | URL | Leaderboard |
+- **Start:** the countdown camera swoops down from the Melissa Lake Park play tower and its tipping bucket to Drip.
+- **Progression:** each stop has a welcome gateway ("STOP 3 OF 8 · McKinney City Hall"), and a banner shows the stop, the time of day and a story line.
+  - The sky and sunlight move from sunrise to noon, sunset and night as Drip runs.
+  - Water features further ahead are dry. They switch on as Drip arrives: pools fill, cascades and curtains start falling, jets rise.
+  - A flowing stream runs alongside the walkway through every stop. It's the trail Drip follows.
+  - A progress bar shows the metres left to Commons at Agora.
+- **Destination:** at 2,400 m, Commons at Agora lights up with glowing ground jets and a finale fountain, and a "The show is ON" celebration plays.
+- **Replay:** the run doesn't end at the destination. The Trail loops as encore laps for a high score.
+- **Game over:** the screen says how far along the Trail the player got ("stop 4 of 8 … 1,050 m short of Commons at Agora"), or that they arrived.
+
+## The eight stops (all real gallery projects)
+Each stop is 300 m. Each scene is a stylised low-poly version of the gallery photo, with no copied 3D assets. Obstacles change their look per stop but keep the same hitboxes.
+
+| # | Project | Recreated from the photo |
 |---|---|---|
-| Drip Dash (home) | `/` | best run |
-| **Water Run** | `/run/` | best run |
-| Bring Back the Flow | `/flow/` | Valley Score |
-| Splash Escape | `/splash/` | best run |
+| 1 | Melissa Lake Park Splash Pad | Play tower with a red roof and a tipping bucket that dumps every 7 s, white slide, spray hoops, ground jets with kids playing, colourful surfacing, shade sails |
+| 2 | The Epic East | Raised koi pond with swimming koi, dark angular basin spilling over its edge, red-orange steel columns, planters, brick and glass building |
+| 3 | McKinney City Hall | Steel hopper on a steel frame, pouring into a basin; brick and glass civic building; gravel beds with grasses |
+| 4 | 3300 Olympus Drive | Stepped cascades with falling water on both sides, striped pavers, trees in planters, bronze sculpture |
+| 5 | Aggie Park | Wooden pedestrian bridge with railings and arches over a boulder-edged pond, stepping stones with people, stadium beyond |
+| 6 | Dallas Arboretum – Rory Meyers Children's Adventure Garden | Elevated walkway with a water curtain falling into a stone-edged stream, shade trees |
+| 7 | Chase Tower | Long reflecting basins with rows of bubbler jets, domed building, agaves (at sunset) |
+| 8 | **Commons at Agora** (destination) | Evening splash pad of green-lit in-ground jets, kids playing, lamp posts |
 
-Getting to and from Water Run:
-- **From Drip Dash:** a highlighted **NEW 3D: Water Run** card on the home screen, plus a "Try Water Run" link on the game-over screen.
-- **Back to Drip Dash:** "← Drip Dash games" on the Water Run title screen, plus back links on the pause and game-over screens.
+## Billboards
+- **Branded billboards:** 2 per stop. They show the inCon-trol logo and four messages:
+  - "Water features, designed & built"
+  - "Every drop, under control."
+  - "Play Drip Dash!" (with Drip)
+  - "Water harvesting & reuse"
 
-Shared across the games:
-- the sign-up (`dripdash.player`)
-- the outfit chosen in Drip Dash (Hard Hat, Hi-Vis Vest, Aqua, Golden), which Drip also wears in Water Run
-- sound settings
-- the backend
+  Service and product lines are taken from the inCon-trol website's own navigation. The boards are slightly weathered to look like real signs.
+- **Project billboard:** 1 per stop, the only interactive object. It shows the real gallery photo, the project name and "Tap for project info", with a pulsing outline and a pin. Players can open it in three ways:
+  - tap or click the sign itself (3D picking)
+  - the **ⓘ project nearby** button that appears while the sign is in view (easier on phones)
+  - the <kbd>I</kbd> key
+- **Pausing:** opening a sign pauses the run safely. Closing it resumes with a 1.5 s 3-2-1 count-in.
+- **Project panel** contents:
+  - name and gallery photo
+  - "In the photo", which describes only what the gallery photo shows
+  - location and gallery summary, for Commons at Agora only (Corinth, TX)
+  - "Architect / designer: Not listed in the inCon-trol gallery"
+  - a link to the gallery
 
-## Gallery projects used as environments
-The game shows a new zone every 450 m and cycles through all five, so a good run sees every one. The obstacles change their look to match each zone, while their hitboxes stay the same.
+  The gallery publishes only names and photos, apart from the Commons at Agora teaser, so **no architects, dates or descriptions were invented.** To add verified details later, edit `site/js/run-projects.js`.
+- **Projects discovered:** opened signs are saved on the device ("📍 Projects discovered 3/8" on the title screen). Every stop's panel can also be opened from the game-over screen.
 
-| Zone | Inspired by (inCon-trol gallery) | What's recreated |
-|---|---|---|
-| Splash Park | Melissa Lake Park Splash Pad | Water tower with a red roof and a tipping bucket that dumps water every 6 s, white slides, colourful spray posts, shade umbrellas, teal-and-yellow pad surface |
-| Cascade Plaza | 3300 Olympus Drive | Stepped weir cascades with water sheets, striped pavers, rows of trees, a bronze sculpture |
-| Koi Court | The Epic East | Red steel columns, swimming koi, an angular fountain basin with a spill edge, planters |
-| City Bridge | Chase Tower and the downtown skyline | Bridge deck over a river, railings, lamp posts, skyline towers (including one with an angled crown), a cable arch |
-| Fountain Lights | inCon-trol illuminated fountain shows | Night plaza with colour-cycling, glowing jets and lit lane edges |
+### Photo hosting (action needed)
+Billboard and panel photos load in this order:
+1. A copy stored on this site, if one exists. Only Chase Tower has one today (`assets/projects/chase-tower.jpg`, from the Egnyte marketing library).
+2. The gallery's own image link (`lh3.googleusercontent.com/d/<id>`).
+3. A branded title card, if neither loads.
 
-Everything is built from simple low-poly shapes in code; no photos are copied into the game. The game-over screen shows which places you reached and links to the real gallery. The zone names are stylised; Marketing should confirm it's fine to name those projects.
+During testing, Google's image host returned **HTTP 429 (too many requests)** for those links, so photos can be missing for some players. **Recommended:** copy the eight gallery photos into `site/assets/gallery/` and list them in `LOCAL` in `run-projects.js`. That needs approval to download them from the gallery.
 
-## Gameplay
-| Action | Keyboard | Touch | Mouse |
-|---|---|---|---|
-| Change lane | ← → / A D | Swipe | Click the left or right 30% of the screen, or drag |
-| Jump | ↑ / W / Space | Swipe up or tap the middle | Click the middle |
-| Slide | ↓ / S | Swipe down | Drag down |
-| Pause | P / Esc | ❚❚ button | ❚❚ button |
+## Graphics
+- **Materials and reflections:** physically based (`MeshStandardMaterial`), with ACES tone mapping and image-based reflections from a generated environment map. Water, glass, steel, bronze and Drip all reflect.
+- **Water:** animated normal-mapped surfaces (pools, ponds, the stream) and streaked, flowing sheets (cascades, curtains, jets). Water features fill and switch on as Drip arrives. At Agora the water glows.
+- **Lighting:**
+  - a gradient sky dome and a sun whose colour, height and angle change with each stop
+  - soft real-time shadows that follow Drip on desktop; phones use a blob shadow instead
+  - a night glow around Drip at Agora
+- **People:** low-poly visitors walking, waving and playing in the jets. Phones show half as many.
+- **Drip's animation:**
+  - stride speed follows running speed; squash and stretch on jumps and slides; leans into lane changes
+  - footstep splashes on wet surfaces
+  - expressions: blinks, eyes widen and brows rise near danger, open "O" mouth in the air, bigger grin on pickups, determined brows when sliding or boosting
+  - turns to face the camera when paused or knocked out
+- **Camera:** intro swoop, gentle run bob, wider field of view during Jet Boost, shake on a crash.
 
-### Obstacles
+## Gameplay and scoring
+Unchanged from the first version:
+- lanes, jump, slide, and a single bounce-back when you clip the side of an obstacle
+- obstacles: low, grate, high, block and geyser
+- power-ups: shield, magnet, x2 and Jet Boost
+- drops and golden valves
+- speed from 13 to 30 m/s
+- score = metres + pickups
 
-| Obstacle | Looks like | How to get past |
-|---|---|---|
-| Low | Pipe barricade, weir wall or planter edge | Jump |
-| Drain grate | Grate spraying water | Jump |
-| High | Water arch, pipe gantry or red beam | Slide |
-| Block | Fountain basin, water wall, cascade block or utility vault | Change lane |
-| Geyser (from 25 s) | Flashes red, then erupts in a cycle | Change lane, or time it |
+The server checks in `submit_water_run` are unchanged, and every simulated run passed them. In simulated runs, bots survived 19–106 s, and the best runs reached Commons at Agora in about 95–105 s.
 
-Every obstacle row leaves at least one way through.
+## Performance
+- **Shapes and materials:** cached and shared, and random sizes snap to a small set. Over a 4.6 km test run, memory levelled off at about 200 shapes and 25 textures, so there's no leak.
+- **Desktop:** about 350–780 draw calls including the shadow pass, and about 33k triangles.
+- **Phones:** no real-time shadows, half the visitors, and pixel ratio capped at 1.5.
 
-### Hits
-- Clipping the side of an obstacle while changing lanes bounces Drip back once. A second bump within 4 s ends the run.
-- A head-on hit ends the run unless you have a shield.
-
-### Speed
-Speed goes from 13 to 30 m/s, and obstacle rows get closer together over time. In automated tests:
-- good and average bot players lasted 20–115 s, most of them 30–90 s
-- standing still lasts about 11 s
-
-### Pickups
-
-| Pickup | What it does |
+## Files
+| File | What it holds |
 |---|---|
-| Drops | +10 each |
-| Golden valves | +100 each, at least 6 s apart |
-| Pressure Regulator | Shield: blocks one hit |
-| Smart Controller | Drop magnet for 8 s |
-| Flow Meter | x2 points for 10 s |
-| Jet Boost | x1.5 speed for 3 s, smashes through obstacles |
-
-Each power-up pickup is also worth +25, and power-ups are at least 10 s apart.
-
-**Score** = 1 point per metre + pickups. The game keeps a personal best and the list of zones you've reached on the device. The leaderboard ranks each player's best single run, monthly and all-time, with company and past-winners tabs.
+| `site/run/index.html` | Screens, HUD, journey bar, project chip, project panel, Trail list |
+| `site/js/run-game.js` | Engine, the eight stops, billboards, water, people, Drip in 3D, story events |
+| `site/js/run-main.js` | Controls (keys, swipe, click), sign picking, panels, journey HUD, scores |
+| `site/js/run-projects.js` | The verified project list and photo sources |
 
 ## Technology
-| Piece | Choice | Why |
-|---|---|---|
-| 3D | **Three.js 0.160**, loaded from the jsDelivr CDN with an import map | Best performance-to-effort for low-poly 3D; no build step, so it fits the existing stack. |
-| Models | Built in code (boxes, cylinders, a lathe teardrop for Drip), with shared geometry and material caches | ~55 geometries in memory, about 300 draw calls and 25k triangles. Simulation and rendering take about 0.9 ms per frame on the test machine. |
-| Rendering | Lambert/Phong materials, fog, one directional light, no real-time shadows (blob shadow under Drip), pixel ratio capped at 1.5 on phones | Smooth on phones |
-| Files | `site/run/index.html`, `site/js/run-game.js` (engine, world, Drip in 3D), `site/js/run-main.js` (screens, controls, scores) | Same layout as the other games |
-| Fallback | If WebGL or the CDN is unavailable, a message points players to the other games | — |
-| Hosting | GitHub Pages, the same deploy | $0 |
-| Backend | Supabase, same project: level `WRUN`, function `submit_water_run`, leaderboards with `p_game = 'wrun'`, admin view `admin.water_run_standings`, export column `water_run_best_score` | $0 on the free tier |
+- Three.js 0.160, pinned, loaded from the jsDelivr CDN, plus `RoomEnvironment` from Three.js's examples.
+- Hosted on GitHub Pages.
+- Supabase backend: level `WRUN`, `submit_water_run`, `admin.water_run_standings`.
 
-### Anti-cheat (`submit_water_run`)
-- A one-time server ticket for level `WRUN`. It can't be reused or used for another game.
-- Run time is checked against the server clock.
-- Distance: at most 46 m/s.
-- Drops: at most 9/s + 10.
-- Golden valves: at most seconds / 5 + 3.
-- Power-ups: at most seconds / 9 + 2.
-- Score: at most distance + drops × 20 + valves × 200 + power-ups × 25 + 10.
-- Rejected runs are kept for review.
-
-If you change the scoring or spawn rates in `RULES` in `run-game.js`, update the function to match.
-
-## Maintenance
-- Nothing to run or renew. Updates are a push to `main` (about 1 minute).
-- Three.js is pinned to 0.160.0, so CDN updates can't break the game. To upgrade it, change the version in `run/index.html` and play-test.
-- To add a zone, add an entry to `ZONES` and a decor builder in `run-game.js`, and add a track texture in `trackTextures()`.
+There's no build step, and nothing extra to run or pay for.

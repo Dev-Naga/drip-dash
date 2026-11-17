@@ -239,3 +239,40 @@ canvas.mascot { width: 92px; height: auto; display: block; margin: 4px auto 0; }
 @media (prefers-reduced-motion: reduce) { #zone-banner.go, #pop.go { animation-duration: .01s; animation-iteration-count: 1; } #zone-banner.go { animation: none; } #pop.go { animation: none; } }
 .game-back + .brand { margin-top: 18px; }
 #zone-banner { background: rgba(0,40,80,.6); border-radius: 18px; padding: 10px 22px 12px; max-width: calc(100vw - 32px); }
+
+/* ---------------- Water Run: story, journey, project signs */
+.story { font-size: 16px; line-height: 1.35; color: var(--deep); margin: 0 0 10px; }
+#journey { position: absolute; left: 50%; top: max(12px, env(safe-area-inset-top)); transform: translateX(-50%); width: min(46vw, 420px); z-index: 2; pointer-events: none; }
+.jr-track { height: 8px; background: rgba(0,40,80,.5); border-radius: 99px; overflow: hidden; border: 1px solid rgba(255,255,255,.5); }
+.jr-fill { height: 100%; width: 0; background: linear-gradient(90deg, #00C1D5, #7ed957); }
+.jr-stops { position: relative; height: 0; }
+.jr-stops span { position: absolute; top: -9px; width: 2px; height: 10px; background: rgba(255,255,255,.75); }
+.jr-stops span:nth-last-child(2) { left: 100% !important; width: auto; height: auto; background: none; top: -18px; font-size: 18px; transform: translateX(-50%); }
+.jr-drip { top: -19px !important; width: auto !important; height: auto !important; background: none !important; font-size: 17px; transform: translateX(-50%); transition: left .2s linear; }
+.jr-label { display: block; text-align: center; color: #fff; font-weight: 700; font-size: 15px; margin-top: 6px; text-shadow: 0 1px 4px rgba(0,30,60,.8); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#proj-chip { position: absolute; left: 50%; bottom: max(40px, calc(env(safe-area-inset-bottom) + 34px)); transform: translateX(-50%); z-index: 3; display: flex; align-items: center; gap: 10px; background: rgba(255,200,69,.96); color: var(--ink); border: 0; border-radius: 16px; padding: 8px 16px 8px 10px; font: inherit; cursor: pointer; box-shadow: 0 6px 18px rgba(0,0,0,.25); text-align: left; max-width: calc(100vw - 32px); animation: chipin .3s ease-out; }
+#proj-chip .pc-i { font-size: 26px; line-height: 1; }
+#proj-chip small { display: block; font-size: 13px; font-weight: 600; }
+#proj-chip b { display: block; font-size: 17px; line-height: 1.1; }
+@keyframes chipin { from { transform: translate(-50%, 12px); opacity: 0; } }
+.project-card { width: min(560px, 100%); text-align: left; max-height: calc(100dvh - 32px); overflow-y: auto; }
+.pj-kicker { margin: 0; font-weight: 700; color: var(--aqua); letter-spacing: 1px; text-transform: uppercase; font-size: 14px; }
+.project-card h2 { margin: 2px 0 10px; font-size: 28px; line-height: 1.1; }
+.pj-photo { border-radius: 12px; overflow: hidden; background: var(--mist); aspect-ratio: 4 / 3; display: grid; place-items: center; margin-bottom: 10px; }
+.pj-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pj-photo span { color: var(--muted); padding: 20px; text-align: center; }
+.pj-facts { margin: 0 0 8px; display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; font-size: 16px; }
+.pj-facts dt { font-weight: 700; color: var(--deep); }
+.pj-facts dd { margin: 0; }
+.pj-src { font-size: 13px; color: var(--muted); margin: 0 0 10px; }
+.trail-list { list-style: none; padding: 0; margin: 0 0 12px; text-align: left; overflow-y: auto; }
+.trail-list button { display: flex; gap: 10px; align-items: center; width: 100%; border: 0; background: none; padding: 8px 6px; border-bottom: 1px solid var(--mist); text-align: left; font: inherit; cursor: pointer; opacity: .6; }
+.trail-list li.got button { opacity: 1; }
+.trail-list .tl-n { width: 30px; height: 30px; border-radius: 50%; background: var(--blue); color: #fff; display: grid; place-items: center; font-weight: 700; flex: none; }
+.trail-list b { display: block; font-size: 17px; color: var(--ink); }
+.trail-list small { color: var(--muted); }
+.over-journey { margin: 0 0 8px; color: var(--deep); font-size: 16px; }
+.zones-reached button { background: var(--mist); color: var(--muted); border: 0; border-radius: 999px; padding: 3px 10px; font: 600 14px var(--ui); cursor: pointer; }
+.zones-reached button.on { background: var(--aqua); color: var(--ink); }
+@media (max-width: 600px) { #journey { width: calc(100vw - 210px); left: auto; right: 104px; transform: none; } .jr-label { font-size: 12px; } }
+@media (max-width: 420px) { #journey { top: auto; bottom: max(118px, calc(env(safe-area-inset-bottom) + 112px)); left: 14px; right: 14px; width: auto; } }
