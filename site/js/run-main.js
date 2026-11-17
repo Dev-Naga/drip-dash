@@ -1,9 +1,10 @@
 // Water Run — UI controller: screens, controls (keys / swipe / click), registration, run tickets, scores.
+// Water Run scripts load with a ?v= tag (see run/index.html) so a deploy never mixes old and new files from the browser cache. Bump it on every change.
 import { api, store, currentMonth, monthLabel } from './api.js';
 import { LIVE } from './config.js';
-import { sfx } from './audio.js';
+import { sfx, ambience } from './audio.js?v=wr10';
 import { mountBoard } from './board.js';
-import { PROJECTS, photoSources } from './run-projects.js';
+import { PROJECTS, photoSources } from './run-projects.js?v=wr10';
 
 const $ = (s) => document.querySelector(s);
 const screens = ['title', 'howto', 'register', 'over', 'board', 'pause', 'nogl', 'project', 'collection'];
@@ -44,7 +45,7 @@ async function boot() {
   try {
     const test = document.createElement('canvas');
     if (!(test.getContext('webgl2') || test.getContext('webgl'))) throw new Error('no webgl');
-    const mod = await import('./run-game.js');
+    const mod = await import('./run-game.js?v=wr10');
     ZONES = mod.ZONES;
     game = new mod.WaterRun($('#game'), {
       onGameOver: (r) => onGameOver(r),
@@ -65,7 +66,15 @@ async function boot() {
   }
 }
 
+let ambT = 0;
 function hud() {
+  // park ambience: fountain bed + birds by day / crickets at night, only while a run is on screen
+  if (game && performance.now() - ambT > 400) {
+    ambT = performance.now();
+    const on = game.state === 'playing' || game.state === 'countdown';
+    ambience.set({ on, water: game.zone.water, birds: !game.zone.night, crickets: !!game.zone.night });
+  }
+  ambience.tick();
   if (game && (game.state === 'playing' || game.state === 'countdown')) {
     $('#h-score').textContent = game.score.toLocaleString();
     $('#h-dist').textContent = `${Math.floor(game.dist).toLocaleString()} m`;
@@ -86,7 +95,7 @@ function hud() {
     $('#jr-label').textContent = game.lap > 0 ? `Encore lap ${game.lap} · ${game.zone.short}` : game.arrived ? 'Commons at Agora: show is ON!' : `${game.zone.short} · ${left.toLocaleString()} m to Commons at Agora`;
     // nearby project sign
     const np = game.state === 'playing' ? game.nearProject : null;
-    if (np) { $('#pc-name').textContent = np.name; }
+    if (np) { $('#pc-name').textContent = innerWidth < 600 ? np.short : np.name; }
     $('#proj-chip').hidden = !np;
   }
   requestAnimationFrame(hud);

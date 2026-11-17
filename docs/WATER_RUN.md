@@ -59,20 +59,40 @@ The eight gallery photos are stored on the site in `site/assets/gallery/` (downl
 - **Fallbacks:** if a stored photo is missing, the game tries the gallery link, then a branded title card.
 - **Adding or replacing a photo:** put the file in `site/assets/gallery/` and list it in `LOCAL` in `site/js/run-projects.js`.
 
-## Graphics
-- **Materials and reflections:** physically based (`MeshStandardMaterial`), with ACES tone mapping and image-based reflections from a generated environment map. Water, glass, steel, bronze and Drip all reflect.
-- **Water:** animated normal-mapped surfaces (pools, ponds, the stream) and streaked, flowing sheets (cascades, curtains, jets). Water features fill and switch on as Drip arrives. At Agora the water glows.
-- **Lighting:**
-  - a gradient sky dome and a sun whose colour, height and angle change with each stop
-  - soft real-time shadows that follow Drip on desktop; phones use a blob shadow instead
-  - a night glow around Drip at Agora
-- **People:** low-poly visitors walking, waving and playing in the jets. Phones show half as many.
-- **Drip's animation:**
-  - stride speed follows running speed; squash and stretch on jumps and slides; leans into lane changes
-  - footstep splashes on wet surfaces
-  - expressions: blinks, eyes widen and brows rise near danger, open "O" mouth in the air, bigger grin on pickups, determined brows when sliding or boosting
-  - turns to face the camera when paused or knocked out
-- **Camera:** intro swoop, gentle run bob, wider field of view during Jet Boost, shake on a crash.
+## Billboards: rendering and stability
+- Sign faces are unlit (`MeshBasicMaterial`, no tone mapping), so logos and photos look the same in every light.
+- Each face sits 8 cm in front of its frame and uses a depth offset, so it can't z-fight (flicker) with the frame. The camera's near plane is 0.3 m for better depth precision.
+- Each sign texture repaints from a clean canvas, and only when its own inputs change: logo loaded, fonts ready, or photo loaded. Project photos preload when the game starts. In testing, no sign texture changed during a 90-second run (23 tracked).
+- Billboards don't animate. The project sign has a fixed gold border and an "i" badge; earlier versions used a pulsing ring.
+- In testing, tapping a visible project sign opened the right project 82 times out of 83 (one tap missed). Opening a sign pauses the game, and closing it resumes after a 3-2-1 count.
+
+## Designed surroundings (no random scenery)
+Each stop has a hand-planned layout (`LAYOUTS` in `run-game.js`): a left and a right park scene for every 30 m section, beyond the project's own water feature. The scenes are:
+
+| Scene | What's in it |
+|---|---|
+| `splashKids` | Mini splash pad with ground jets, kids playing, a parent on a bench |
+| `playground` | Play tower and slide, swings with a swinging kid, a parent on a bench, a shade tree |
+| `picnic` | Family on a checked blanket under a shade tree, a kid running round, picnic table |
+| `benches` | Paved rest area with benches, lamp, bin, flower bed, people strolling |
+| `pavilion` | Shade pavilion with families at tables, restroom building with a sign |
+| `kiosk` | Snack kiosk with a striped awning and a queue, patio tables with umbrellas |
+| `garden` | Hedges, flower beds, ornamental tree, someone walking a dog |
+| `grove` | Shade trees with seat walls and people resting |
+| `fountain` | Round civic fountain with people sitting on the rim |
+
+- Every position, size and person is fixed, so a stop looks the same on every visit, like a real place.
+- Aggie Park has lawns and boulder banks beyond the pond. The Arboretum uses autumn trees.
+- People are posed: seated people are frozen in place, while walkers, runners, swingers and splashing kids move.
+
+## Atmosphere
+- **Light and time of day:** sunrise at Melissa, bright noon at Olympus, a golden-hour autumn at the Arboretum, sunset downtown at Chase Tower, and evening at Agora with lit buildings, glowing jets, lamps and stars.
+- **Horizon:** each stop has distant scenery that follows the camera: rolling hills, a tree line, and a skyline, stadium or autumn woods.
+- **Sky:** a soft sun or moon disc, and drifting clouds tinted for sunset.
+- **Floating particles:** sparkles, pollen, mist by the cascades, falling autumn leaves, golden motes at sunset, and fireflies at night. They stay clear of the lanes.
+- **Water:** reflective, normal-mapped surfaces; flowing falling water; water features switch on as Drip arrives. Drip splashes through puddles on wet walkways.
+- **Sound** (all synthesized, no audio files): a fountain-water bed whose level depends on the stop, birdsong by day and crickets at night. It plays only during a run and respects mute.
+- **Camera:** an intro swoop, a field of view that widens slightly with speed and more on Jet Boost, and a gentle roll into lane changes. Roll and shake are off with reduced-motion settings.
 
 ## Gameplay and scoring
 Unchanged from the first version:
@@ -86,9 +106,10 @@ Unchanged from the first version:
 The server checks in `submit_water_run` are unchanged, and every simulated run passed them. In simulated runs, bots survived 19–106 s, and the best runs reached Commons at Agora in about 95–105 s.
 
 ## Performance
-- **Shapes and materials:** cached and shared, and random sizes snap to a small set. Over a 4.6 km test run, memory levelled off at about 200 shapes and 25 textures, so there's no leak.
-- **Desktop:** about 350–780 draw calls including the shadow pass, and about 33k triangles.
-- **Phones:** no real-time shadows, half the visitors, and pixel ratio capped at 1.5.
+- **Merging:** each 30 m section's static, opaque scenery (including seated people) is merged into one mesh per material. Because every stop and section is identical on each lap, the merge happens once and is cached. After that, updating the world takes about 1 ms per frame.
+- **Distance:** moving details (jets, walking people) are drawn only in the nearer sections. Far sections are fogged anyway.
+- **Draw calls:** desktop with shadows uses about 380–720 per frame; phones, with no real-time shadows, about 325. Phones also show fewer people and particles, and pixel ratio is capped at 1.5.
+- **Caching:** Water Run's scripts and CSS load with a `?v=` tag (in `site/run/index.html` and the imports in `run-main.js` / `run-game.js`). That stops a browser mixing old and new files for up to 10 minutes after a deploy. **Bump the tag on every change.**
 
 ## Files
 | File | What it holds |

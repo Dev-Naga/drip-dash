@@ -276,3 +276,4 @@ canvas.mascot { width: 92px; height: auto; display: block; margin: 4px auto 0; }
 .zones-reached button.on { background: var(--aqua); color: var(--ink); }
 @media (max-width: 600px) { #journey { width: calc(100vw - 210px); left: auto; right: 104px; transform: none; } .jr-label { font-size: 12px; } }
 @media (max-width: 420px) { #journey { top: auto; bottom: max(118px, calc(env(safe-area-inset-bottom) + 112px)); left: 14px; right: 14px; width: auto; } }
+@media (max-width: 600px) { #proj-chip small { font-size: 11px; } #proj-chip b { font-size: 15px; } #proj-chip { padding: 6px 12px 6px 8px; } }
