@@ -73,7 +73,7 @@ On entering a stop, a compact card appears bottom-left (top on phones) for 4 sec
 
 A timer bar shows how long it has left. Dismiss it straight away with **×** or <kbd>Enter</kbd>. All 8 stops use the same design.
 
-Locations and descriptions were checked against public sources (city sites, news, Texas TDLR records, landscape-architecture press). The URLs are in `sources` in `site/js/run-projects.js` and are linked in each project panel. No architects are named.
+Locations and descriptions were checked against public sources (city sites, news, Texas TDLR records, landscape-architecture press). The URLs are kept in `sources` in `site/js/run-projects.js` (not shown in the game). No architects are named.
 
 ### Pause screen
 Opens with <kbd>Esc</kbd>/<kbd>P</kbd> or the ❚❚ button. It also opens automatically when the player switches tab or app or the window loses focus.
@@ -151,10 +151,11 @@ Each stop is 300 m. Each scene is a stylised low-poly version of the gallery pho
 - **Pausing:** opening a sign pauses the run safely. Closing it resumes with a 1.5 s 3-2-1 count-in.
 - **Project panel** contents:
   - name and gallery photo
+  - location (or "Not published in the inCon-trol gallery") and a one-line verified description
   - "In the photo", which describes only what the gallery photo shows
-  - location and gallery summary, for Commons at Agora only (Corinth, TX)
-  - "Architect / designer: Not listed in the inCon-trol gallery"
-  - a link to the gallery
+  - "Listed in: inCon-trol Water Systems project gallery"
+
+  The panel has no Sources or Architect / designer rows (removed on request). The source URLs stay in `sources` in `site/js/run-projects.js` for reference.
 
   The gallery publishes only names and photos, apart from the Commons at Agora teaser, so **no architects, dates or descriptions were invented.** To add verified details later, edit `site/js/run-projects.js`.
 - **Projects discovered:** opened signs are saved on the device ("📍 Projects discovered 3/8" on the title screen). Every stop's panel can also be opened from the game-over screen.

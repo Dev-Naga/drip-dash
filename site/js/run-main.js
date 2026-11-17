@@ -1,10 +1,10 @@
 // Water Run — UI controller: screens, controls (keys / swipe / click), registration, run tickets, scores.
 // Water Run scripts load with a ?v= tag (see run/index.html) so a deploy never mixes old and new files from the browser cache. Bump it on every change.
-import { api, store, currentMonth, monthLabel } from './api.js?v=wr16';
+import { api, store, currentMonth, monthLabel } from './api.js?v=wr17';
 import { LIVE } from './config.js';
-import { sfx, ambience } from './audio.js?v=wr16';
+import { sfx, ambience } from './audio.js?v=wr17';
 import { mountBoard } from './board.js';
-import { PROJECTS, photoSources } from './run-projects.js?v=wr16';
+import { PROJECTS, photoSources } from './run-projects.js?v=wr17';
 
 const $ = (s) => document.querySelector(s);
 const screens = ['title', 'howto', 'register', 'over', 'board', 'pause', 'nogl', 'project', 'collection'];
@@ -61,7 +61,7 @@ async function boot() {
   try {
     const test = document.createElement('canvas');
     if (!(test.getContext('webgl2') || test.getContext('webgl'))) throw new Error('no webgl');
-    const mod = await import('./run-game.js?v=wr16');
+    const mod = await import('./run-game.js?v=wr17');
     ZONES = mod.ZONES;
     game = new mod.WaterRun($('#game'), {
       onGameOver: (r) => onGameOver(r),
@@ -280,9 +280,7 @@ function openProject(id, fromRun) {
   facts.push(['Location', p.location || 'Not published in the inCon-trol gallery']);
   facts.push(['About', p.blurb]);
   facts.push(['In the photo', p.seen]);
-  facts.push(['Architect / designer', 'Not listed in the inCon-trol gallery']);
   facts.push(['Listed in', 'inCon-trol Water Systems project gallery']);
-  if (p.sources?.length) facts.push(['Sources', p.sources.map((u) => `<a href="${u}" target="_blank" rel="noopener">${new URL(u).hostname.replace('www.', '')}</a>`).join(' · ')]);
   $('#pj-facts').innerHTML = facts.map(([k2, v]) => `<dt>${k2}</dt><dd>${v}</dd>`).join('');
   $('#pj-close').textContent = fromRun ? 'Resume run' : 'Back';
   show('project');
