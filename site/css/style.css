@@ -308,3 +308,47 @@ canvas.mascot { width: 92px; height: auto; display: block; margin: 4px auto 0; }
 @media (max-width: 600px) { #mission { top: auto; bottom: max(150px, calc(env(safe-area-inset-bottom) + 146px)); right: 10px; left: 10px; width: auto; } #stop-card { top: 120px; bottom: auto; } #stop-card b { font-size: 19px; } }
 @media (prefers-reduced-motion: reduce) { #stop-card.go, #mission.good, #mission.bad { animation: none; } #stop-card.go .sc-timer { animation: sctime 4s linear forwards; } }
 #stop-card .sc-mission b { display: inline; font: inherit; font-weight: 700; margin: 0; color: var(--blue); }
+
+/* ---------------- Water Run: branded pause screen */
+.pause-screen { background: rgba(0, 22, 44, .5); backdrop-filter: blur(4px) saturate(.9); -webkit-backdrop-filter: blur(4px) saturate(.9); align-items: center; }
+.pause-card { width: min(760px, 100%); padding: 0; text-align: left; overflow: hidden; border-top: 0; display: flex; flex-direction: column; max-height: calc(100dvh - 32px); }
+.pz-hero { position: relative; height: 190px; flex: none; background: linear-gradient(135deg, #5D85B7, #003a66); }
+.pz-hero img#pz-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.pz-shade { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,30,60,.25) 0%, rgba(0,30,60,.05) 35%, rgba(0,30,60,.82) 100%); }
+.pz-top { position: absolute; left: 14px; right: 14px; top: 12px; display: flex; justify-content: space-between; align-items: center; }
+.pz-logo { height: 44px; width: auto; background: rgba(255,255,255,.94); border-radius: 10px; padding: 5px 10px; }
+.pz-badge { background: var(--aqua); color: var(--ink); font-weight: 700; letter-spacing: 1px; border-radius: 999px; padding: 4px 12px; font-size: 15px; }
+.pz-title { position: absolute; left: 16px; right: 16px; bottom: 12px; color: #fff; text-shadow: 0 2px 8px rgba(0,0,0,.45); }
+.pz-title small { display: block; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; font-size: 13px; color: #CFF6FF; }
+.pz-title b { display: block; font-family: var(--display); font-size: clamp(24px, 4.5vw, 34px); line-height: 1.05; }
+.pz-title span { display: block; font-weight: 600; font-size: 15px; margin-top: 2px; }
+.pz-body { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; padding: 14px 18px 4px; overflow-y: auto; }
+.pz-blurb { margin: 0 0 10px; font-size: 15px; line-height: 1.35; color: var(--deep); }
+.pz-stats { list-style: none; padding: 0; margin: 0 0 10px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.pz-stats li { background: var(--mist); border-radius: 10px; padding: 6px 4px; text-align: center; }
+.pz-stats b { display: block; font-size: 19px; color: var(--blue); }
+.pz-stats span { font-size: 12px; color: var(--muted); }
+.pz-mission { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-weight: 700; color: var(--deep); font-size: 15px; margin-bottom: 8px; }
+.pz-pips i { display: inline-block; width: 13px; height: 13px; border-radius: 50%; border: 2px solid var(--aqua); margin-left: 4px; }
+.pz-pips i.on { background: #7ed957; border-color: #7ed957; }
+.pz-journey .jr-track { background: var(--mist); border-color: var(--blue30); }
+.pz-journey small { display: block; color: var(--muted); font-weight: 600; margin-top: 4px; font-size: 13px; }
+.pause-card h3 { margin: 0 0 6px; font-family: var(--display); color: var(--blue); font-size: 20px; }
+.pz-ctrl { display: grid; gap: 4px; margin-bottom: 8px; }
+.pz-ctrl p { margin: 0; display: flex; justify-content: space-between; gap: 10px; font-size: 15px; border-bottom: 1px solid var(--mist); padding: 3px 0; }
+.pz-ctrl .k { font-weight: 600; color: var(--deep); }
+.pz-ctrl p > span:last-child { color: var(--muted); text-align: right; }
+#pz-touch { display: none; }
+@media (pointer: coarse) { #pz-touch { display: grid; } #pz-keys { display: none; } }
+.pz-tip { margin: 4px 0 0; font-size: 14px; background: #eaf8fb; border-radius: 10px; padding: 6px 10px; color: var(--deep); }
+.pz-actions { padding: 10px 18px 14px; border-top: 1px solid var(--mist); flex: none; background: #fff; }
+.pz-actions .btn.big { margin-bottom: 8px; }
+.pz-actions .btn.link { width: 100%; }
+@media (max-width: 640px) {
+  .pz-body { grid-template-columns: 1fr; gap: 10px; padding: 12px 14px 4px; }
+  .pz-hero { height: 150px; }
+  .pz-logo { height: 34px; }
+  .pz-stats b { font-size: 16px; }
+}
+@media (max-height: 520px) and (orientation: landscape) { .pz-hero { height: 110px; } .pz-blurb { display: none; } }
+#pop { max-width: calc(100vw - 24px); white-space: normal; text-align: center; }

@@ -1,10 +1,10 @@
 // Water Run — UI controller: screens, controls (keys / swipe / click), registration, run tickets, scores.
 // Water Run scripts load with a ?v= tag (see run/index.html) so a deploy never mixes old and new files from the browser cache. Bump it on every change.
-import { api, store, currentMonth, monthLabel } from './api.js?v=wr14';
+import { api, store, currentMonth, monthLabel } from './api.js?v=wr16';
 import { LIVE } from './config.js';
-import { sfx, ambience } from './audio.js?v=wr14';
+import { sfx, ambience } from './audio.js?v=wr16';
 import { mountBoard } from './board.js';
-import { PROJECTS, photoSources } from './run-projects.js?v=wr14';
+import { PROJECTS, photoSources } from './run-projects.js?v=wr16';
 
 const $ = (s) => document.querySelector(s);
 const screens = ['title', 'howto', 'register', 'over', 'board', 'pause', 'nogl', 'project', 'collection'];
@@ -21,7 +21,7 @@ function show(name) {
   $('#run-hud').hidden = !playing;
   $('#journey').hidden = !playing;
   $('#mission').hidden = !playing;
-  if (!playing) $('#stop-card').hidden = true;
+  if (!playing) { $('#stop-card').hidden = true; $('#pop').hidden = true; }
   if (!playing) $('#proj-chip').hidden = true;
   if (name && !['board', 'howto', 'project', 'collection'].includes(name)) lastScreen = name;
 }
@@ -61,7 +61,7 @@ async function boot() {
   try {
     const test = document.createElement('canvas');
     if (!(test.getContext('webgl2') || test.getContext('webgl'))) throw new Error('no webgl');
-    const mod = await import('./run-game.js?v=wr14');
+    const mod = await import('./run-game.js?v=wr16');
     ZONES = mod.ZONES;
     game = new mod.WaterRun($('#game'), {
       onGameOver: (r) => onGameOver(r),
@@ -326,9 +326,38 @@ $('#btn-board').onclick = openBoard;
 $('#btn-board2').onclick = openBoard;
 $('#btn-howto').onclick = () => show('howto');
 document.querySelectorAll('[data-back]').forEach((b) => (b.onclick = () => show(lastScreen)));
-const doPause = () => { if (!game) return; game.pause(); show('pause'); };
+// ---------------------------------------------------------------- branded pause screen
+// The game freezes completely while paused (run-game.js skips the clock, physics, animation and timers).
+function fillPause() {
+  const z = game.zone, i = z.idx, last = i === PROJECTS.length - 1;
+  $('#pz-stop').textContent = `${game.lap ? 'Encore · ' : ''}${last ? 'Destination' : `Stop ${i + 1} of ${PROJECTS.length}`} · ${z.time}`;
+  $('#pz-name').textContent = z.name;
+  $('#pz-loc').textContent = z.location ? `📍 ${z.location}` : '📍 Location not published in the inCon-trol gallery';
+  $('#pz-blurb').textContent = z.blurb;
+  const img = $('#pz-img'), srcs = photoSources(z, 1000); let k = 0;
+  img.hidden = false; img.alt = `${z.name} (inCon-trol project photo)`;
+  img.onerror = () => { k++; if (k < srcs.length) img.src = srcs[k]; else img.hidden = true; };
+  if (img.dataset.zone !== z.id) { img.dataset.zone = z.id; img.src = srcs[0]; }
+  $('#pz-score').textContent = game.score.toLocaleString();
+  $('#pz-dist').textContent = `${Math.floor(game.dist).toLocaleString()} m`;
+  $('#pz-tank').textContent = `${Math.round(game.water)}%`;
+  $('#pz-del').textContent = game.deliveries;
+  const done = game.stopProgress.get(Math.floor(game.dist / 300)) || 0;
+  $('#pz-mission').textContent = done >= 3 ? `${cap(z.supply)}: fully supplied ✔` : `Mission: supply ${z.supply} (${done}/3)`;
+  $('#pz-pips').innerHTML = [0, 1, 2].map((n) => `<i class="${n < done ? 'on' : ''}"></i>`).join('');
+  const J = PROJECTS.length * 300, d = game.dist % J;
+  $('#pz-jfill').style.width = `${Math.min(100, (d / J) * 100)}%`;
+  $('#pz-jlabel').textContent = game.arrived && !game.lap ? 'Commons at Agora reached: the show is on!' : `${Math.max(0, Math.ceil((J - d) / 10) * 10).toLocaleString()} m to Commons at Agora · ${game.stopsDone} stop${game.stopsDone === 1 ? '' : 's'} fully supplied`;
+}
+const doPause = () => {
+  if (!game || !(game.state === 'playing' || game.state === 'countdown')) return;
+  game.pause(); fillPause(); show('pause');
+  setTimeout(() => $('#btn-resume').focus(), 30);
+};
+const doResume = () => { if (!game || game.state !== 'paused') return; show(null); game.resume(1.2); };   // short 3-2-1 so you're not caught out
 $('#btn-pause').onclick = doPause;
-$('#btn-resume').onclick = () => { show(null); game.resume(); };
+$('#btn-resume').onclick = doResume;
+$('#btn-restart').onclick = () => { if (!game) return; game.state = 'idle'; startGame(); };
 $('#btn-quit').onclick = () => { game.quit(); };
 const muteBtn = $('#btn-mute');
 const setMuteIcon = () => { muteBtn.textContent = sfx.muted ? '🔇' : '🔊'; muteBtn.setAttribute('aria-label', sfx.muted ? 'Unmute sound' : 'Mute sound'); };
@@ -377,13 +406,16 @@ addEventListener('keydown', (e) => {
     else if (k === 'Enter' && !$('#stop-card').hidden) { clearTimeout(stopCard.h); $('#stop-card').hidden = true; }
   } else if (!$('#screen-project').hidden && ['Escape', 'Enter', 'i', 'I'].includes(k)) {
     e.preventDefault(); $('#pj-close').click();
-  } else if (game && game.state === 'paused' && ['p', 'P', 'Escape', ' '].includes(k)) {
-    e.preventDefault(); show(null); game.resume();
+  } else if (game && game.state === 'paused' && !$('#screen-pause').hidden && ['p', 'P', 'Escape', ' '].includes(k)) {
+    if (k === ' ' && ['BUTTON', 'A'].includes(document.activeElement?.tagName) && document.activeElement.id !== 'btn-resume') return;
+    e.preventDefault(); doResume();
   } else if (!$('#screen-title').hidden || !$('#screen-over').hidden) {
     if (k === ' ' || k === 'Enter') { if (['BUTTON', 'A'].includes(document.activeElement?.tagName)) return; e.preventDefault(); wantPlay(); }
   }
 });
-document.addEventListener('visibilitychange', () => { if (document.hidden && game && (game.state === 'playing' || game.state === 'countdown')) doPause(); });
+// interruptions pause automatically: switching tabs/apps or the window losing focus
+document.addEventListener('visibilitychange', () => { if (document.hidden) doPause(); });
+addEventListener('blur', () => doPause());
 
 $('#demo-badge').hidden = LIVE;
 if (params.get('email') && !player) prefill();

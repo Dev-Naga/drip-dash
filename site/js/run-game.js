@@ -5,8 +5,8 @@
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { sfx } from './audio.js?v=wr14';
-import { PROJECTS, photoSources } from './run-projects.js?v=wr14';
+import { sfx } from './audio.js?v=wr16';
+import { PROJECTS, photoSources } from './run-projects.js?v=wr16';
 
 // Scoring rules — the server checks scores against these (supabase/schema.sql → submit_water_run).
 export const RULES = { DROP: 10, VALVE: 100, POWERUP: 25, MULT: 2, START_SPEED: 13, MAX_SPEED: 30, BOOST: 1.5,
@@ -1254,7 +1254,10 @@ void main() {
   // ------------------------------------------------ main loop
   frame(ts) {
     const dt = this.last ? Math.min(0.05, (ts - this.last) / 1000) : 0;
-    this.last = ts; this.clock += dt;
+    this.last = ts;
+    // paused: nothing advances (no clock, physics, scenery animation, particles or timers); just redraw the frozen frame
+    if (this.state === 'paused') { this.acc = 0; this.renderer.render(this.scene, this.camera); return; }
+    this.clock += dt;
     if (this.state === 'playing' || this.state === 'countdown' || this.dead) {
       this.acc += dt;
       let n = 0;

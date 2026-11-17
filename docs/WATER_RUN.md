@@ -75,6 +75,31 @@ A timer bar shows how long it has left. Dismiss it straight away with **×** or 
 
 Locations and descriptions were checked against public sources (city sites, news, Texas TDLR records, landscape-architecture press). The URLs are in `sources` in `site/js/run-projects.js` and are linked in each project panel. No architects are named.
 
+### Pause screen
+Opens with <kbd>Esc</kbd>/<kbd>P</kbd> or the ❚❚ button. It also opens automatically when the player switches tab or app or the window loses focus.
+
+**What it shows**
+- **Header:** the inCon-trol logo and a "Paused" badge over the current stop's real gallery photo. Under them: the stop number and time of day, the project name, and its verified location.
+- **About the stop:** the one-line description.
+- **Run so far:**
+  - score, distance, water tank and deliveries
+  - this stop's mission with 3/3 pips
+  - a progress bar to Commons at Agora, with stops fully supplied
+- **How to play:**
+  - computers: ←/→ or A/D, ↑/W/Space, ↓/S, Esc/P, I
+  - touch screens: swipes, tap and the ❚❚ button
+
+  Each device shows only the controls it uses.
+- **Buttons:**
+  - **▶ Resume:** also Esc, P or Space. It continues from exactly the same spot after a 1.2 s 3-2-1.
+  - **↻ Restart:** a fresh run.
+  - **End run:** goes to the game-over screen.
+  - **← Back to Drip Dash**
+
+**Look:** the game shows through behind the screen, darkened and blurred so the place stays recognisable. On desktop the screen uses two columns; on phones, one column that scrolls.
+
+**Everything freezes:** while paused, the game skips its clock, physics, timers, scenery animation, particles and park sounds. It only redraws the frozen frame. In testing, nothing changed over 2 seconds of pause: clock, distance, score, water, Drip, obstacles, people, particles and clouds were all identical. After resuming, distance and score matched exactly.
+
 ### Camera
 - The camera follows Drip by sliding sideways only; it never rotates. In testing over 80 seconds of lane changes, measured roll and yaw stayed at exactly 0.
 - The field of view is fixed: no speed or boost zoom, and no run bob.

@@ -13,7 +13,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Zilla+Slab:ital,wght@0,700;1,700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="../css/style.css?v=wr14">
+  <link rel="stylesheet" href="../css/style.css?v=wr16">
   <script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.min.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }</script>
 </head>
 <body class="game-page run-page">
@@ -153,12 +153,52 @@
     </section>
 
     <!-- PAUSE -->
-    <section id="screen-pause" class="screen" hidden aria-label="Paused">
-      <div class="card">
-        <h2>Paused</h2>
-        <button id="btn-resume" class="btn primary big">Resume</button>
-        <button id="btn-quit" class="btn link">End run</button>
-        <a class="btn link" href="../">← Back to Drip Dash</a>
+    <section id="screen-pause" class="screen pause-screen" hidden aria-label="Game paused" role="dialog" aria-modal="true">
+      <div class="card pause-card">
+        <div class="pz-hero">
+          <img id="pz-img" alt="" referrerpolicy="no-referrer">
+          <div class="pz-shade"></div>
+          <div class="pz-top"><img class="pz-logo" src="../assets/logo-incontrol.png" alt="inCon-trol Water Systems"><span class="pz-badge">❚❚ Paused</span></div>
+          <div class="pz-title"><small id="pz-stop"></small><b id="pz-name"></b><span id="pz-loc"></span></div>
+        </div>
+        <div class="pz-body">
+          <div class="pz-col">
+            <p class="pz-blurb" id="pz-blurb"></p>
+            <ul class="pz-stats">
+              <li><b id="pz-score">0</b><span>score</span></li>
+              <li><b id="pz-dist">0 m</b><span>distance</span></li>
+              <li><b id="pz-tank">0%</b><span>water tank</span></li>
+              <li><b id="pz-del">0</b><span>deliveries</span></li>
+            </ul>
+            <div class="pz-mission"><span id="pz-mission"></span><span class="pz-pips" id="pz-pips"></span></div>
+            <div class="pz-journey"><div class="jr-track"><div class="jr-fill" id="pz-jfill"></div></div><small id="pz-jlabel"></small></div>
+          </div>
+          <div class="pz-col">
+            <h3>How to play</h3>
+            <div class="pz-ctrl" id="pz-keys">
+              <p><span class="k"><kbd>←</kbd><kbd>→</kbd> or <kbd>A</kbd><kbd>D</kbd></span><span>Change lanes</span></p>
+              <p><span class="k"><kbd>↑</kbd> <kbd>W</kbd> or <kbd>Space</kbd></span><span>Jump</span></p>
+              <p><span class="k"><kbd>↓</kbd> or <kbd>S</kbd></span><span>Slide</span></p>
+              <p><span class="k"><kbd>Esc</kbd> or <kbd>P</kbd></span><span>Pause / resume</span></p>
+              <p><span class="k"><kbd>I</kbd></span><span>Project info (near a sign)</span></p>
+            </div>
+            <div class="pz-ctrl" id="pz-touch">
+              <p><span class="k">👆 Swipe ← →</span><span>Change lanes</span></p>
+              <p><span class="k">👆 Swipe ↑ or tap middle</span><span>Jump</span></p>
+              <p><span class="k">👆 Swipe ↓</span><span>Slide</span></p>
+              <p><span class="k">❚❚ button</span><span>Pause</span></p>
+            </div>
+            <p class="pz-tip">💧 Collect drops to fill the tank, then run through the gold <b>supply inlets</b> to switch on each project's water.</p>
+          </div>
+        </div>
+        <div class="pz-actions">
+          <button id="btn-resume" class="btn primary big">▶ Resume</button>
+          <div class="row">
+            <button id="btn-restart" class="btn">↻ Restart</button>
+            <button id="btn-quit" class="btn">End run</button>
+          </div>
+          <a class="btn link" href="../">← Back to Drip Dash</a>
+        </div>
       </div>
     </section>
 
@@ -196,6 +236,6 @@
 
     <div id="toast" role="status" hidden></div>
   </main>
-  <script type="module" src="../js/run-main.js?v=wr14"></script>
+  <script type="module" src="../js/run-main.js?v=wr16"></script>
 </body>
 </html>
