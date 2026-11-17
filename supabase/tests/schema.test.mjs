@@ -148,5 +148,48 @@ const dadm = await q(`select * from admin.dash_standings limit 5`);
 ok(dadm.length === 1 && dadm[0].email === 'erin@acme.com' && dadm[0].best_score === 4200, 'admin runner standings view');
 const exp = await q(`select * from admin.player_export where email = 'erin@acme.com'`);
 ok(exp[0].dash_best_score === 4200, 'player export includes both games');
+
+// ---------------------------------------------------------------- Splash Escape ('splash')
+await asAnon();
+const fay = (await q(`select register_player('fay@acme.com','Fay','Acme Landscaping',true) r`))[0].r;
+async function splash(key, secs, score, drops, pups, level = 'SPLASH') {
+  const t = (await q(`select start_run($1, $2) r`, [key, level]))[0].r;
+  await asAdmin(); await q(`update runs set started_at = now() - make_interval(secs => $1) where id = $2`, [secs + 1, t.run_id]); await asAnon();
+  return (await q(`select submit_splash($1,$2,$3,$4,$5,$6) r`, [t.run_id, key, score, Math.round(secs * 1000), drops, pups]))[0].r;
+}
+r = await splash(fay.player_key, 62, 1900, 20, 4);
+ok(r.accepted && r.best_month === 1900 && r.month_rank === 1, `splash: valid run accepted (${JSON.stringify(r)})`);
+r = await splash(fay.player_key, 40, 900, 8, 2);
+ok(r.accepted && r.best_month === 1900, 'splash: board keeps best single run');
+r = await splash(fay.player_key, 30, 9000, 10, 1);
+ok(!r.accepted && /bonus/.test(r.reason), `splash: inflated score rejected (${r.reason})`);
+await asAdmin(); await q(`delete from runs where status = 'started'`); await asAnon();   // stay under the per-player start rate limit
+r = await splash(fay.player_key, 20, 500, 80, 0);
+ok(!r.accepted && /golden drops/.test(r.reason), `splash: impossible pickups rejected (${r.reason})`);
+r = await splash(fay.player_key, 2, 20, 0, 0);
+ok(!r.accepted && /short/.test(r.reason), `splash: too-short run rejected (${r.reason})`);
+{
+  const t = (await q(`select start_run(null,'RUN') r`))[0].r;
+  await asAdmin(); await q(`update runs set started_at = now() - interval '31 seconds' where id = $1`, [t.run_id]); await asAnon();
+  const x = (await q(`select submit_splash($1,$2,300,30000,0,0) r`, [t.run_id, fay.player_key]))[0].r;
+  ok(!x.accepted && /not for Splash/.test(x.reason), `splash: runner ticket can't post a splash score (${x.reason})`);
+}
+{
+  const t = (await q(`select start_run(null,'SPLASH') r`))[0].r;
+  await asAdmin(); await q(`update runs set started_at = now() - interval '30 seconds' where id = $1`, [t.run_id]); await asAnon();
+  const x = (await q(`select submit_run($1,$2,500,20000,400,0,0) r`, [t.run_id, fay.player_key]))[0].r;
+  ok(!x.accepted, 'splash ticket can\'t post a runner score');
+  await expectErr(() => q(`select submit_splash($1,$2,200,20000,0,0)`, [t.run_id, fay.player_key]), 'splash: ticket reuse blocked');
+}
+const slb = await q(`select * from get_leaderboard('month', null, 10, 'splash')`);
+ok(slb.length === 1 && slb[0].display_name === 'Fay' && Number(slb[0].score) === 1900, 'splash board only has splash players ' + JSON.stringify(slb.map((x) => [x.display_name, Number(x.score)])));
+ok(!(await q(`select * from get_leaderboard('month', null, 10)`)).some((x) => x.display_name === 'Fay'), 'runner board excludes splash scores');
+ok(!(await q(`select * from get_leaderboard('month', null, 10, 'flow')`)).some((x) => x.display_name === 'Fay'), 'Flow board excludes splash scores');
+ok(Number((await q(`select * from get_company_board('month', 10, 'splash')`))[0].total) === 1900, 'splash company board');
+await asAdmin();
+const sadm = await q(`select * from admin.splash_standings limit 5`);
+ok(sadm.length === 1 && sadm[0].email === 'fay@acme.com' && sadm[0].best_score === 1900, 'admin splash standings view');
+const sexp = await q(`select * from admin.player_export where email = 'fay@acme.com'`);
+ok(sexp[0].splash_best_score === 1900 && sexp[0].flow_valley_score === null, 'player export: splash best, not counted as Flow');
 console.log(fails ? `\n${fails} FAILURE(S)` : '\nALL TESTS PASSED');
 process.exit(fails ? 1 : 0);

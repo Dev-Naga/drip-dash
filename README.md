@@ -1,13 +1,14 @@
 # Drip Dash: inCon-trol Water Systems newsletter games
 
-Two browser games share one site, one sign-up and one backend:
+Three browser games share one site, one sign-up and one backend:
 
 | Game | Where | What it is | Leaderboard |
 |---|---|---|---|
 | **Drip Dash** (main game) | `/` | One-tap endless runner: Drip races through turf fields, a pump station and a fountain plaza, dodging sprinklers, valve boxes, standpipes, low main lines and geysers | Best single run per player |
 | **Bring Back the Flow** | `/flow/` | 7-level story adventure: restore Wellbrook's water systems by operating valves, pumps, VFDs, zones, a rain diverter, a water tower and a fountain show | Valley Score (best score on each level, added up) |
+| **Splash Escape** | `/splash/` | 30–90 s arcade survival on a circular splash pad: Spritz dodges falling drops, geysers, the rotating Big Fountain, jets, drains, fountain carts, sprinklers and splash waves | Best single run per player |
 
-Players switch games from the menus: the Drip Dash title screen has a **NEW: Bring Back the Flow** card and its game-over screen has a link; Flow's title screen links back. The leaderboard page has a tab for each game.
+Players switch games from the menus: the Drip Dash title screen has **NEW** cards for the other two games and its game-over screen links to both; Flow and Splash Escape link back. The leaderboard page has a tab for each game. Splash Escape details: [docs/SPLASH_ESCAPE.md](docs/SPLASH_ESCAPE.md).
 
 **Character customization (Drip Dash):** *Customize Drip* on the title screen (or *Change outfit* after a run) opens the outfit picker:
 - Classic Drip and Hard Hat are available from the start.
@@ -19,7 +20,8 @@ The chosen outfit is worn in the game and shown on the title screen. Bring Back 
 |---|---|
 | Drip Dash (main) | https://dev-naga.github.io/drip-dash/ |
 | Bring Back the Flow | https://dev-naga.github.io/drip-dash/flow/ |
-| Leaderboards | https://dev-naga.github.io/drip-dash/leaderboard.html (add `?game=flow` for Flow) |
+| Splash Escape | https://dev-naga.github.io/drip-dash/splash/ |
+| Leaderboards | https://dev-naga.github.io/drip-dash/leaderboard.html (add `?game=flow` or `?game=splash`) |
 | Rules & privacy | https://dev-naga.github.io/drip-dash/rules.html |
 | Flow design document | [docs/GAME_DESIGN.md](docs/GAME_DESIGN.md) |
 
@@ -28,7 +30,7 @@ The chosen outfit is worn in the game and shown on the title screen. Bring Back 
 ## Stack
 - **Game:** plain HTML5 Canvas and JavaScript modules on a fixed 960×540 stage that scales to any screen. No framework, no build step, and all art is drawn in code. Portrait phones get a "rotate" prompt with a "play anyway" option.
 - **Hosting:** GitHub Pages, deployed automatically by `.github/workflows/deploy-pages.yml` on every push to `main` that touches `site/`.
-- **Backend:** Supabase Postgres (free tier). The browser calls 7 locked-down SQL functions. Per-level score limits and minimum durations live in `private.levels`. Schema: [`supabase/schema.sql`](supabase/schema.sql).
+- **Backend:** Supabase Postgres (free tier). The browser calls 9 locked-down SQL functions. Per-level score limits and minimum durations live in `private.levels`. Schema: [`supabase/schema.sql`](supabase/schema.sql).
 - **Keep-alive:** `.github/workflows/supabase-keepalive.yml` pings Supabase daily so the free project doesn't pause.
 
 ## Folder map
@@ -38,6 +40,9 @@ site/
   js/game.js, main.js   runner engine (+ outfits) and runner screens
   flow/index.html       Bring Back the Flow: title, story, register, briefing, results, album, leaderboard
   js/flow-main.js       Flow screens
+  splash/index.html     Splash Escape: title, how-to, achievements, register, game over, leaderboard
+  js/splash-game.js     Splash Escape engine, arena art and Spritz the mascot
+  js/splash-main.js     Splash Escape screens and controls
   js/engine.js          stage scaling, input, loop, particles, Drip + Gauge characters, dialog
   js/kit.js             living-blueprint parts: Pipe, Valve, Pump, Meter, Tank, Slider, Btn
   js/levelbase.js       shared level framework (timer, golden drops, scoring, win/fail)
@@ -78,5 +83,5 @@ cd supabase/tests && npm install && npm test
 | Logo | `IWS-logo-hozt.png` (Egnyte, Approved Design, 2011) | Confirm it's current |
 | Fonts | Zilla Slab and Barlow Condensed, standing in for Clarendon and Univers Condensed | Free web fonts; keep or license the originals |
 | Project photos and captions | 6 photos from Egnyte `Project Photos/2024 Portfolio` | Confirm OK to publish and check the captions |
-| "Wellbrook", Drip, Gauge | Original fictional town and characters | Marketing sign-off |
+| "Wellbrook", Drip, Gauge, Spritz | Original fictional town and characters | Marketing sign-off |
 | Prizes, eligibility, contact | `[bracketed]` text in `site/rules.html` | Fill in and have it reviewed |

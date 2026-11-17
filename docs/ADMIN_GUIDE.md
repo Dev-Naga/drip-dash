@@ -43,8 +43,10 @@ Months follow **US Central time**. The leaderboard rolls over automatically at m
    select * from admin.dash_standings where month = '2026-11' limit 20;
    -- Bring Back the Flow: Valley Score (best score per level, added up) with a per-level breakdown
    select * from admin.flow_standings where month = '2026-11' limit 20;
+   -- Splash Escape: best run per player (and their longest survival time)
+   select * from admin.splash_standings where month = '2026-11' limit 20;
    ```
-   Both show name, company and **email** for the top players.
+   All three show name, company and **email** for the top players.
 2. Review the top 5. Things to look out for:
    - a huge score from someone with only 1–2 games
    - several accounts from the same company with near-identical scores
@@ -75,7 +77,7 @@ update public.players set display_name = 'Player 123' where email_norm = 'someon
 |---|---|
 | Public leaderboard (month, all-time, companies, past winners) | `https://<your-site>/leaderboard.html` |
 | In-game leaderboard | **Leaderboard** button in the game, or `https://<your-site>/?view=leaderboard` |
-| Everything incl. emails (admins only) | Supabase → SQL Editor → `select * from admin.dash_standings;` (runner) or `admin.flow_standings` (Flow) |
+| Everything incl. emails (admins only) | Supabase → SQL Editor → `select * from admin.dash_standings;` (runner), `admin.flow_standings` (Flow) or `admin.splash_standings` (Splash Escape) |
 | Raw tables | Supabase → Table Editor → `players`, `runs` |
 | Suspicious runs auto-rejected | `select * from admin.rejected_runs;` |
 
@@ -98,7 +100,7 @@ The game pre-fills the registration form from these values. If a token is empty,
 
 ### b) Sync players back to HubSpot (monthly, about 5 minutes)
 1. Supabase → SQL Editor: `select * from admin.player_export;` → **Download CSV**.
-2. HubSpot → Contacts → **Import** → match on Email. Map `dash_best_score`, `flow_valley_score`, `flow_levels_completed` and `games_played` to custom contact properties (create matching "Drip Dash …" properties once). Use `marketing_opt_in` to decide on newsletter subscription.
+2. HubSpot → Contacts → **Import** → match on Email. Map `dash_best_score`, `splash_best_score`, `flow_valley_score`, `flow_levels_completed` and `games_played` to custom contact properties (create matching "Drip Dash …" properties once). Use `marketing_opt_in` to decide on newsletter subscription.
 3. You can then build HubSpot lists like "played Drip Dash this month" for follow-ups.
 
 ### Later (optional)

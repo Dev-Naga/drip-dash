@@ -194,3 +194,10 @@ canvas.mascot { width: 92px; height: auto; display: block; margin: 4px auto 0; }
 .game-tabs { margin: 8px 0 4px; }
 .game-tabs a { flex: 1; text-align: center; text-decoration: none; padding: 8px 4px; border-radius: 9px; font-weight: 700; font-size: 16px; color: var(--muted); }
 .game-tabs a[aria-selected=true] { background: #fff; color: var(--blue); box-shadow: 0 1px 4px rgba(0,0,0,.12); }
+
+/* ---------------- Splash Escape */
+.splash-page #stage { background: #5DB451; }
+.game-switch-row { display: flex; justify-content: space-between; gap: 10px; margin: 4px 0 0; }
+.over-ach { min-height: 0; margin: 0 0 6px; color: var(--deep); font-weight: 600; }
+.over-ach:empty { display: none; }
+.ach-list .ach-ic { font-size: 24px; }

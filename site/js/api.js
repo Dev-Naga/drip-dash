@@ -39,9 +39,11 @@ async function rpc(fn, args = {}) {
   return data;
 }
 
-// Two games share one backend:
-//   'dash' = Drip Dash runner (level 'RUN'): leaderboard = each player's best single run.
-//   'flow' = Bring Back the Flow (levels L1…): leaderboard = Valley Score (best per level, summed).
+// Three games share one backend:
+//   'dash'   = Drip Dash runner (level 'RUN'): leaderboard = each player's best single run.
+//   'flow'   = Bring Back the Flow (levels L1…): leaderboard = Valley Score (best per level, summed).
+//   'splash' = Splash Escape (level 'SPLASH'): leaderboard = each player's best single run.
+const GAME_OF = (level) => (level === 'RUN' ? 'dash' : level === 'SPLASH' ? 'splash' : 'flow');
 const live = {
   mode: 'live',
   register: (p) => rpc('register_player', {
@@ -49,7 +51,9 @@ const live = {
     p_consent: !!p.consent, p_opt_in: !!p.optIn, p_source: p.source || null, p_hp: p.hp || '',
   }),
   startRun: (playerKey, level = 'RUN') => rpc('start_run', { p_player_key: playerKey || null, p_level: level }),
-  submitRun: (r) => (r.level && r.level !== 'RUN'
+  submitRun: (r) => (r.level === 'SPLASH'
+    ? rpc('submit_splash', { p_run_id: r.runId, p_player_key: r.playerKey, p_score: r.score, p_duration_ms: r.durationMs, p_drops: r.drops, p_powerups: r.powerups })
+    : r.level && r.level !== 'RUN'
     ? rpc('submit_level', { p_run_id: r.runId, p_player_key: r.playerKey, p_level: r.level, p_score: r.score, p_duration_ms: r.durationMs, p_stars: r.stars })
     : rpc('submit_run', { p_run_id: r.runId, p_player_key: r.playerKey, p_score: r.score, p_duration_ms: r.durationMs, p_distance: r.distance, p_drops: r.drops, p_valves: r.valves })),
   leaderboard: (period, limit = 50, game = 'dash') => rpc('get_leaderboard', { p_period: period, p_month: null, p_limit: limit, p_game: game }),
@@ -59,7 +63,7 @@ const live = {
 };
 
 // ---------------------------------------------------------------- DEMO (this browser only) — mirrors the server rules
-const DEMO_KEY = 'dripdash.demo.v3';
+const DEMO_KEY = 'dripdash.demo.v4';
 function demoDb() {
   let db = LS.get(DEMO_KEY);
   if (!db) {
@@ -71,6 +75,8 @@ function demoDb() {
       db.players[key] = { name, company, email: `sample${i}@example.com` };
       db.runs.push({ key, level: 'RUN', score: dash, month: m, at: now - i * 3600e3 });
       db.runs.push({ key, level: 'RUN', score: Math.round(dash * 0.8), month: '2026-10', at: now - 40 * 86400e3 });
+      db.runs.push({ key, level: 'SPLASH', score: 600 + ((i * 5 + 3) % 6) * 210, month: m, at: now - i * 5400e3 });
+      db.runs.push({ key, level: 'SPLASH', score: 500 + i * 90, month: '2026-10', at: now - 41 * 86400e3 });
       for (let l = 1; l <= levels; l++) {
         db.runs.push({ key, level: `L${l}`, score: 3600 + ((i * 7 + l * 13) % 10) * 120, month: m, at: now - (i * 5 + l) * 3600e3 });
         db.runs.push({ key, level: `L${l}`, score: 3000 + l * 100, month: '2026-10', at: now - 40 * 86400e3 });
@@ -80,11 +86,11 @@ function demoDb() {
   }
   return db;
 }
-// one row per player: dash = best single RUN score; flow = sum of best per level (excluding RUN)
+// one row per player: dash/splash = best single run; flow = sum of best per level
 function standings(runs, game) {
   const by = new Map();
   for (const r of runs) {
-    if ((game === 'dash') !== (r.level === 'RUN')) continue;
+    if (GAME_OF(r.level) !== game) continue;
     const m = by.get(r.key) || new Map(); const b = m.get(r.level);
     if (!b || r.score > b.score || (r.score === b.score && r.at < b.at)) m.set(r.level, { score: r.score, at: r.at });
     by.set(r.key, m);
@@ -107,7 +113,7 @@ const demo = {
     const db = demoDb(), level = r.level || 'RUN';
     db.runs.push({ key: r.playerKey, level, score: r.score, month: currentMonth(), at: Date.now() });
     LS.set(DEMO_KEY, db);
-    return { accepted: true, ...(await demo.me(r.playerKey, level === 'RUN' ? 'dash' : 'flow')) };
+    return { accepted: true, ...(await demo.me(r.playerKey, GAME_OF(level))) };
   },
   async leaderboard(period, limit = 50, game = 'dash') {
     const db = demoDb(), m = currentMonth();
