@@ -54,13 +54,10 @@ Each stop is 300 m. Each scene is a stylised low-poly version of the gallery pho
   The gallery publishes only names and photos, apart from the Commons at Agora teaser, so **no architects, dates or descriptions were invented.** To add verified details later, edit `site/js/run-projects.js`.
 - **Projects discovered:** opened signs are saved on the device ("📍 Projects discovered 3/8" on the title screen). Every stop's panel can also be opened from the game-over screen.
 
-### Photo hosting (action needed)
-Billboard and panel photos load in this order:
-1. A copy stored on this site, if one exists. Only Chase Tower has one today (`assets/projects/chase-tower.jpg`, from the Egnyte marketing library).
-2. The gallery's own image link (`lh3.googleusercontent.com/d/<id>`).
-3. A branded title card, if neither loads.
-
-During testing, Google's image host returned **HTTP 429 (too many requests)** for those links, so photos can be missing for some players. **Recommended:** copy the eight gallery photos into `site/assets/gallery/` and list them in `LOCAL` in `run-projects.js`. That needs approval to download them from the gallery.
+### Photos
+The eight gallery photos are stored on the site in `site/assets/gallery/` (downloaded from the inCon-trol gallery on 17 Nov 2026 and resized to 1,000 px wide, 115–335 KB each). Billboards and panels use these copies, so they don't depend on Google's image host, which rate-limited the gallery links during testing (HTTP 429).
+- **Fallbacks:** if a stored photo is missing, the game tries the gallery link, then a branded title card.
+- **Adding or replacing a photo:** put the file in `site/assets/gallery/` and list it in `LOCAL` in `site/js/run-projects.js`.
 
 ## Graphics
 - **Materials and reflections:** physically based (`MeshStandardMaterial`), with ACES tone mapping and image-based reflections from a generated environment map. Water, glass, steel, bronze and Drip all reflect.

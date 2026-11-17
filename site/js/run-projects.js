@@ -2,13 +2,12 @@
 // SOURCE: https://incontrolwatersystems.com/gallery (project names and photos). The gallery does not list
 // architects, dates or descriptions, so none are given here. "seen" describes only what is visible in the
 // gallery photo. Only Commons at Agora has a published location and summary (gallery case-study teaser).
-// Photos are served from the gallery's own image links (lh3.googleusercontent.com/d/<id>), which allow
-// cross-origin use, so nothing is copied into this repo.
+// Photos: copies of the gallery photos live in site/assets/gallery/<id>.jpg (downloaded from the gallery's
+// image links on 2026-11-17, resized to 1000 px wide). The gallery link (lh3.googleusercontent.com/d/<photo>)
+// is only a fallback, because Google's image host rate-limits busy pages (HTTP 429).
 export const GALLERY_URL = 'https://incontrolwatersystems.com/gallery';
 export const photoUrl = (id, w = 800) => `https://lh3.googleusercontent.com/d/${id}=w${w}`;
-// Photos stored on this site are tried first (the gallery's image host can rate-limit busy pages),
-// then the gallery link. Add a project id here once its gallery photo is copied into site/assets/gallery/.
-const LOCAL = { chase: 'assets/projects/chase-tower.jpg' };
+const LOCAL = Object.fromEntries(['melissa', 'epic', 'mckinney', 'olympus', 'aggie', 'arboretum', 'chase', 'agora'].map((id) => [id, `assets/gallery/${id}.jpg`]));
 export const photoSources = (p, w = 1000) => [LOCAL[p.id] && new URL(`../${LOCAL[p.id]}`, import.meta.url).href, photoUrl(p.photo, w)].filter(Boolean);
 
 export const PROJECTS = [
