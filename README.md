@@ -27,11 +27,15 @@ The chosen outfit is worn in the game and shown on the title screen. Bring Back 
 | Rules & privacy | https://dev-naga.github.io/drip-dash/rules.html |
 | Flow design document | [docs/GAME_DESIGN.md](docs/GAME_DESIGN.md) |
 
-> **Status:** live in **DEMO MODE** (scores saved per browser) until a Supabase project is connected. See [docs/ADMIN_GUIDE.md](docs/ADMIN_GUIDE.md), section 1.
+> **Status: LIVE** with the shared Supabase leaderboard (connected 2026-11-17).
+> - Main site (Vercel): https://drip-dash-nine.vercel.app
+> - Mirror (GitHub Pages): https://dev-naga.github.io/drip-dash/
+> - Database: Supabase project "Games" (`kkhjnjwmhpzxnqjtprzw`). Admin views (`admin.*`) are in the Supabase SQL editor; see [docs/ADMIN_GUIDE.md](docs/ADMIN_GUIDE.md).
 
 ## Stack
 - **Game:** plain HTML5 Canvas and JavaScript modules on a fixed 960×540 stage that scales to any screen. No framework, no build step, and all art is drawn in code. Portrait phones get a "rotate" prompt with a "play anyway" option.
-- **Hosting:** GitHub Pages, deployed automatically by `.github/workflows/deploy-pages.yml` on every push to `main` that touches `site/`.
+- **Hosting:** Vercel (project `drip-dash`, connected to this repo, redeploys on every push to `main`; config and security headers in `vercel.json`, which publishes the `site/` folder as-is with no build step). GitHub Pages also serves the same files via `.github/workflows/deploy-pages.yml`.
+- **Backend:** Supabase. `site/js/config.js` holds the project URL and the *publishable* key, which is meant to be public: the tables have RLS on with no policies, so the key can only call the game functions in `supabase/schema.sql`. Never put the `service_role` / secret key in the site.
 - **Backend:** Supabase Postgres (free tier). The browser calls 10 locked-down SQL functions. Water Run loads Three.js 0.160 from the jsDelivr CDN (pinned version). Per-level score limits and minimum durations live in `private.levels`. Schema: [`supabase/schema.sql`](supabase/schema.sql).
 - **Keep-alive:** `.github/workflows/supabase-keepalive.yml` pings Supabase daily so the free project doesn't pause.
 
