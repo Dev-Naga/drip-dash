@@ -230,5 +230,38 @@ ok(C.emailDomain('Jane.Doe@Mail.AcmeCorp.com ') === 'acmecorp.com', 'browser: em
 ok(C.guessFromDomain('acme-landscaping.com') === 'Acme Landscaping', 'browser: domain guess "Acme Landscaping"');
 ok(C.companyKey('inCon-trol Water Systems, Inc.') === 'incontrolwatersystems', 'browser: company key');
 ok(C.companyKey('https://www.incontrolwatersystems.com/') === 'incontrolwatersystems', 'browser: website as company → company key');
+// ================================================================ 12. email-domain typos and returning players
+for (const [x, y] of [['gmial', 'gmail'], ['incontrolwatersystem.com', 'incontrolwatersystems.com'], ['acme.con', 'acme.com'], ['', 'abc'],
+  ['kitten', 'sitting'], ['ab', 'ba'], ['same', 'same'], ['acme-landscpaing.com', 'acme-landscaping.com']]) {
+  const r = await one(`select private.edit_distance($1, $2) d`, [x, y]);
+  ok(r.d === C.editDistance(x, y), `same edit distance: "${x}" ~ "${y}" = ${r.d}`);
+}
+const knownDoms = (await q(`select domain from company_domains`)).map((r) => r.domain);
+const TYPOS = [
+  ['acme-landscpaing.com', 'acme-landscaping.com'],   // swapped letters
+  ['acme-landscaping.co', 'acme-landscaping.com'],    // dropped letter
+  ['acmelandscaping.com', 'acme-landscaping.com'],    // missing hyphen
+  ['gmial.com', 'gmail.com'], ['yaho.com', 'yahoo.com'], ['outlok.com', 'outlook.com'],
+  ['acme-landscaping.com', null],                     // a known domain is never a typo
+  ['gmail.com', null], ['zzq.com', null], ['brandnewcompany.com', null],
+];
+for (const [d, want] of TYPOS) {
+  const r = await one(`select private.domain_typo($1) t`, [d]);
+  ok(r.t === want, `typo check: ${d} -> ${want} (got ${r.t})`);
+  ok(C.domainTypo(d, knownDoms) === r.t, `browser agrees on typo check: ${d}`);
+}
+await anon();
+let lt = (await one(`select lookup_company('jane@acme-landscpaing.com', 'Acme Landscaping') r`)).r;
+ok(lt.domain_typo === 'acme-landscaping.com', 'lookup_company offers "did you mean acme-landscaping.com?"');
+lt = (await one(`select lookup_company('jane@acme-landscaping.com', 'Acme Landscaping') r`)).r;
+ok(lt.domain_typo === null, 'lookup_company: no typo hint for the correct domain');
+const first = (await one(`select register_player('typo.test@acme-landscaping.com','Tia','Acme Landscaping',true) r`)).r;
+ok(first.returning === false, 'first sign-up: returning = false ("Welcome")');
+const again = (await one(`select register_player('Typo.Test@acme-landscaping.com','Tia','Acme Landscaping',true) r`)).r;
+ok(again.returning === true && again.player_key === first.player_key, 'same email again: returning = true ("Welcome back"), same player');
+await admin();
+ok(C.fixEmailDomain('Jo@IncontrolWaterSystem.com', 'incontrolwatersystem.com', 'incontrolwatersystems.com') === 'Jo@incontrolwatersystems.com', 'browser: fixes the email domain');
+ok(C.fixEmailDomain('pat@mail.acme.con', 'acme.con', 'acme.com') === 'pat@mail.acme.com', 'browser: fix keeps the subdomain');
+
 console.log(fails ? `\n${fails} FAILURE(S)` : '\nALL COMPANY TESTS PASSED');
 process.exit(fails ? 1 : 0);

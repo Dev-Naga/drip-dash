@@ -1,6 +1,6 @@
 // Data layer: talks to Supabase RPC functions (LIVE) or a browser-only mock (DEMO).
 import { CONFIG, LIVE } from './config.js';
-import { companyNorm, companyKey, companyMatch, emailDomain, isPersonalDomain, guessFromDomain, PERSONAL_MSG } from './company.js';
+import { companyNorm, companyKey, companyMatch, emailDomain, isPersonalDomain, guessFromDomain, domainTypo, PERSONAL_MSG } from './company.js';
 
 const LS = {
   get(k, d = null) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch { return d; } },
@@ -125,6 +125,7 @@ const demo = {
   async register(p) {
     const db = demoDb(), email = p.email.trim().toLowerCase();
     let key = Object.keys(db.players).find((k) => db.players[k].email === email);
+    const returning = !!key;
     if (!key) {
       if (isPersonalDomain(emailDomain(email))) throw new Error(PERSONAL_MSG(emailDomain(email)));
       const cos = demoCompanies(db), chosen = p.companyId && cos.find((c) => c.id === p.companyId);
@@ -132,7 +133,7 @@ const demo = {
       key = (crypto.randomUUID && crypto.randomUUID()) || String(Math.random()).slice(2);
       db.players[key] = { name: p.name.trim(), company: (chosen || same)?.name || p.company.trim(), email }; LS.set(DEMO_KEY, db);
     }
-    return { player_key: key, display_name: db.players[key].name, company: db.players[key].company };
+    return { player_key: key, display_name: db.players[key].name, company: db.players[key].company, returning };
   },
   // Same answers as the live lookup_company, worked out from this browser's demo players.
   async lookupCompany(email, company) {
@@ -148,6 +149,7 @@ const demo = {
       domain_company: byName && byDomain && byName !== byDomain ? { id: byDomain.id, name: byDomain.name } : null,
       suggestions: sugg, guess: !match && biz ? guessFromDomain(biz) : null,
       needs_confirmation: !!(byName && byDomain && byName !== byDomain) || (!match && sugg.length > 0) || (!byName && byDomain && key !== byDomain.id),
+      domain_typo: domainTypo(d, cos.flatMap((c) => [...c.domains])),
     };
   },
   async startRun(playerKey, level = 'RUN') { return { run_id: `demo-${level}-${Date.now()}` }; },

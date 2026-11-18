@@ -446,6 +446,47 @@ begin
 end $$;
 
 -- Sign-up helper for the browser: what we can tell about this email + company name. Never writes anything.
+-- Edit distance with swapped neighbours counted as one edit (gmial -> gmail = 1). Mirrors editDistance() in site/js/company.js.
+create or replace function private.edit_distance(a text, b text)
+returns int language plpgsql immutable set search_path = pg_catalog as $$
+declare la int := length(coalesce(a, '')); lb int := length(coalesce(b, ''));
+        d int[]; i int; j int; c int; w int := lb + 1;
+begin
+  if la = 0 then return lb; end if;
+  if lb = 0 then return la; end if;
+  d := array_fill(0, array[(la + 1) * w]);                       -- d[i][j] stored at i*w + j + 1
+  for i in 0..la loop d[i * w + 1] := i; end loop;
+  for j in 0..lb loop d[j + 1] := j; end loop;
+  for i in 1..la loop
+    for j in 1..lb loop
+      c := case when substr(a, i, 1) = substr(b, j, 1) then 0 else 1 end;
+      d[i * w + j + 1] := least(d[(i - 1) * w + j + 1] + 1, d[i * w + j] + 1, d[(i - 1) * w + j] + c);
+      if i > 1 and j > 1 and substr(a, i, 1) = substr(b, j - 1, 1) and substr(a, i - 1, 1) = substr(b, j, 1) then
+        d[i * w + j + 1] := least(d[i * w + j + 1], d[(i - 2) * w + j - 1] + 1);
+      end if;
+    end loop;
+  end loop;
+  return d[la * w + lb + 1];
+end $$;
+
+-- A probable typo of a known email domain: incontrolwatersystem.com -> incontrolwatersystems.com, gmial.com -> gmail.com.
+-- Known = a company's domain on the leaderboard, or a personal email provider. A domain that is itself known is never a typo.
+-- Allowed: 1 edit, or 2 for long domains (12+ characters). Mirrors domainTypo() in site/js/company.js.
+create or replace function private.domain_typo(p_domain text)
+returns text language sql stable set search_path = pg_catalog, public, private as $$
+  with known as (
+    select domain as d, 0 as pri from public.company_domains
+    union all select domain, 1 from private.email_providers
+  )
+  select k.d from known k
+   where p_domain is not null and length(p_domain) >= 6
+     and not exists (select 1 from known x where x.d = p_domain)
+     and abs(length(k.d) - length(p_domain)) <= 2
+     and private.edit_distance(p_domain, k.d) <= case when length(k.d) >= 12 then 2 else 1 end
+   order by private.edit_distance(p_domain, k.d), k.pri, k.d
+   limit 1
+$$;
+
 create or replace function public.lookup_company(p_email text, p_company text default null)
 returns json
 language plpgsql stable security definer set search_path = pg_catalog, public, private as $$
@@ -497,7 +538,8 @@ begin
     'domain_company', case when v_conflict then (select json_build_object('id', c.id, 'name', c.name) from public.companies c where c.id = v_dom_c) end,
     'suggestions', v_sugg,
     'guess', case when v_match is null then v_guess end,
-    'needs_confirmation', v_needs
+    'needs_confirmation', v_needs,
+    'domain_typo', private.domain_typo(v_dom)   -- e.g. 'incontrolwatersystems.com' when the email says incontrolwatersystem.com
   );
 end $$;
 
@@ -519,6 +561,7 @@ declare
   v_biz   text;
   v_cid   uuid;
   v_p     public.players;
+  v_back  boolean := false;   -- a returning player (this email already has a record)
 begin
   if coalesce(p_hp, '') <> '' then raise exception 'Registration failed.'; end if;
   if not coalesce(p_consent, false) then raise exception 'Please accept the contest rules.'; end if;
@@ -532,6 +575,7 @@ begin
 
   select * into v_p from public.players where email_norm = v_email;
   if found then
+    v_back := true;
     -- returning player: keep their record (personal addresses registered before this rule keep working)
     if v_p.is_blocked then raise exception 'This account is not eligible.'; end if;
     if v_p.company_id is null then
@@ -558,7 +602,8 @@ begin
   end if;
   return json_build_object('player_key', v_p.player_key, 'display_name', v_p.display_name,
     'company', coalesce((select name from public.companies where id = private.active_company(v_p.company_id)), v_p.company),
-    'company_id', private.active_company(v_p.company_id));
+    'company_id', private.active_company(v_p.company_id),
+    'returning', v_back);
 end $$;
 
 -- --------------------------------------------------------------- start_run (one-time ticket per level attempt)

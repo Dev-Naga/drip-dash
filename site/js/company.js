@@ -65,6 +65,43 @@ export const PERSONAL_LABELS = new Set(['gmail', 'googlemail', 'yahoo', 'ymail',
 export const isPersonalDomain = (d) => !!d && (PERSONAL_DOMAINS.has(d) || PERSONAL_LABELS.has(d.split('.')[0]));
 export const guessFromDomain = (d) => (d ? d.split('.')[0].replace(/-/g, ' ').replace(/\b[a-z]/g, (c) => c.toUpperCase()).slice(0, 60) : '');
 
+// Edit distance where swapping two neighbouring letters counts as one edit (gmial -> gmail = 1). Mirrors private.edit_distance.
+export function editDistance(a, b) {
+  a = String(a || ''); b = String(b || '');
+  const la = a.length, lb = b.length;
+  if (!la) return lb;
+  if (!lb) return la;
+  const d = Array.from({ length: la + 1 }, (_, i) => Array.from({ length: lb + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0)));
+  for (let i = 1; i <= la; i++) {
+    for (let j = 1; j <= lb; j++) {
+      const c = a[i - 1] === b[j - 1] ? 0 : 1;
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + c);
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
+    }
+  }
+  return d[la][lb];
+}
+// A probable typo of a known domain (company domains first, then personal providers), or null. Mirrors private.domain_typo.
+export function domainTypo(domain, companyDomains = []) {
+  if (!domain || domain.length < 6) return null;
+  const known = [...new Set(companyDomains)].map((d) => [d, 0]).concat([...PERSONAL_DOMAINS].map((d) => [d, 1]));
+  if (known.some(([d]) => d === domain)) return null;
+  let best = null;
+  for (const [d, pri] of known) {
+    if (Math.abs(d.length - domain.length) > 2) continue;
+    const dist = editDistance(domain, d);
+    if (dist > (d.length >= 12 ? 2 : 1)) continue;
+    if (!best || dist < best.dist || (dist === best.dist && (pri < best.pri || (pri === best.pri && d < best.d)))) best = { d, dist, pri };
+  }
+  return best ? best.d : null;
+}
+// The same address with its domain corrected: pat@mail.acme.con + acme.com -> pat@mail.acme.com
+export function fixEmailDomain(email, from, to) {
+  const [local, host = ''] = String(email).trim().split('@');
+  const h = host.toLowerCase();
+  return `${local}@${h.endsWith(from) ? h.slice(0, h.length - from.length) + to : to}`;
+}
+
 const FIRST_WORD_STOP = new Set(['city', 'county', 'state', 'national', 'american', 'texas', 'north', 'south', 'central', 'united', 'first',
   'global', 'international', 'general', 'premier', 'advanced', 'superior', 'quality', 'professional', 'southern', 'northern', 'western', 'eastern']);
 function trigrams(s) { const p = `  ${s} `, t = new Set(); for (let i = 0; i + 3 <= p.length; i++) t.add(p.slice(i, i + 3)); return t; }
@@ -134,7 +171,7 @@ export function enhanceRegistration(form, api) {
   panel.className = 'co-confirm'; panel.hidden = true; panel.setAttribute('role', 'group'); panel.setAttribute('aria-live', 'polite');
   coHint.after(panel);
 
-  const st = { autofilled: false, guessed: false, chosen: null, seq: 0, timer: 0 };
+  const st = { autofilled: false, guessed: false, chosen: null, seq: 0, timer: 0, typoOk: null };
   const setHint = (el, html, kind = '') => { el.innerHTML = html || ''; el.dataset.kind = kind; };
   const setCompany = (v) => { coIn.value = v; coIn.classList.remove('autofill'); void coIn.offsetWidth; coIn.classList.add('autofill'); };
 
@@ -150,7 +187,14 @@ export function enhanceRegistration(form, api) {
       setHint(emailHint, `✋ ${esc(PERSONAL_MSG(d))}`, 'bad'); emailIn.setAttribute('aria-invalid', 'true'); return;
     }
     emailIn.removeAttribute('aria-invalid');
-    setHint(emailHint, res?.domain ? `Business email ✔ <span class="muted">(${esc(res.domain)})</span>` : '', 'ok');
+    if (res?.domain_typo && st.typoOk !== d) {
+      const fixed = fixEmailDomain(email, d, res.domain_typo);
+      setHint(emailHint, `Did you mean <b>${esc(fixed)}</b>? <button type="button" class="btn link typo-fix">Yes, fix it</button>`, 'warn');
+      emailHint.querySelector('.typo-fix').onclick = () => { emailIn.value = fixed; emailIn.focus(); lookup(); };
+      if (isPersonalDomain(res.domain_typo)) return;
+    } else {
+      setHint(emailHint, res?.domain ? `Business email ✔ <span class="muted">(${esc(res.domain)})</span>` : '', 'ok');
+    }
     if (!res) return;
     const empty = !coIn.value.trim();
     if (res.match && res.via === 'domain' && (empty || st.autofilled)) {
@@ -173,12 +217,12 @@ export function enhanceRegistration(form, api) {
   coIn.addEventListener('input', () => { Object.assign(st, { autofilled: false, guessed: false, chosen: null }); setHint(coHint, ''); panel.hidden = true; coIn.classList.remove('autofill'); });
   coIn.addEventListener('change', () => { if (emailIn.value.trim()) lookup(); });
 
-  function ask(title, options) {
+  function ask(title, options, editInput = coIn, editLabel = '✎ Let me edit the company name') {
     return new Promise((resolve) => {
-      panel.innerHTML = `<p class="co-q">${title}</p>${options.map((o, i) => `<button type="button" class="btn ${i === 0 ? 'primary' : ''} co-opt" data-i="${i}">${o.label}</button>`).join('')}<button type="button" class="btn link co-edit">✎ Let me edit the company name</button>`;
+      panel.innerHTML = `<p class="co-q">${title}</p>${options.map((o, i) => `<button type="button" class="btn ${i === 0 ? 'primary' : ''} co-opt" data-i="${i}">${o.label}</button>`).join('')}<button type="button" class="btn link co-edit">${editLabel}</button>`;
       panel.hidden = false;
       panel.querySelectorAll('.co-opt').forEach((b) => (b.onclick = () => { panel.hidden = true; resolve(options[+b.dataset.i].value); }));
-      panel.querySelector('.co-edit').onclick = () => { panel.hidden = true; coIn.focus(); coIn.select(); resolve(null); };
+      panel.querySelector('.co-edit').onclick = () => { panel.hidden = true; editInput.focus(); editInput.select(); resolve(null); };
       panel.querySelector('.co-opt')?.focus();
       panel.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     });
@@ -195,7 +239,17 @@ export function enhanceRegistration(form, api) {
       let res;
       try { res = await api.lookupCompany(email, typed); } catch { res = null; }
       if (res ? res.personal_blocked : isPersonalDomain(d)) throw new Error(PERSONAL_MSG(d));
-      if (!res) return {};                                       // offline: the server still decides safely (exact matches only)
+      if (!res) return {};
+      if (res.domain_typo && st.typoOk !== d) {
+        // a mistyped domain would create a second player for the same person, so check before saving
+        const fixed = fixEmailDomain(email, d, res.domain_typo);
+        if (isPersonalDomain(res.domain_typo)) throw new Error(`That looks like a typo of ${res.domain_typo}. ${PERSONAL_MSG('')}`);
+        const pick = await ask(`Is your email <b>${esc(fixed)}</b>? <small>“${esc(d)}” looks like a typo of ${esc(res.domain_typo)}.</small>`,
+          [{ label: `Yes, use ${esc(fixed)}`, value: 'fix' }, { label: `No, ${esc(email)} is right`, value: 'keep' }], emailIn, '✎ Let me edit my email');
+        if (!pick) return null;
+        if (pick === 'fix') { emailIn.value = fixed; await lookup(); } else st.typoOk = d;
+        return this.resolve();
+      }                                       // offline: the server still decides safely (exact matches only)
       const typedKey = companyKey(typed), sugg = res.suggestions || [];
       if (st.chosen && !st.guessed && companyKey(st.chosen.name) === typedKey) return { companyId: st.chosen.id };
       if (!res.needs_confirmation && !st.guessed && !(sugg.length && !res.match)) return res.match ? { companyId: res.match.id } : {};

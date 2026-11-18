@@ -113,7 +113,7 @@ $('#form-register').addEventListener('submit', async (e) => {
     const res = await api.register(data);
     player = { player_key: res.player_key, display_name: res.display_name, company: res.company };
     store.set('dripdash.player', player);
-    toast(`Welcome, ${player.display_name}!`);
+    toast(`${res.returning ? 'Welcome back' : 'Welcome'}, ${player.display_name}!`);
     const next = afterRegister; afterRegister = null;
     if (next) next(); else show('title');
   } catch (ex) {

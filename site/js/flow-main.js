@@ -123,7 +123,7 @@ $('#form-register').addEventListener('submit', async (e) => {
     Object.assign(d, co); btn.textContent = 'Saving…';
     const r = await api.register(d);
     player = { player_key: r.player_key, display_name: r.display_name, company: r.company };
-    store.set('dripdash.player', player); toast(`Welcome, ${player.display_name}!`);
+    store.set('dripdash.player', player); toast(`${r.returning ? 'Welcome back' : 'Welcome'}, ${player.display_name}!`);
     const next = afterRegister; afterRegister = null; next ? next() : show('title');
   } catch (ex) { err.textContent = ex.message || 'Could not save. Please try again.'; }
   finally { btn.disabled = false; btn.textContent = 'Save & play'; }
