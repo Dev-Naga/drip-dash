@@ -1,9 +1,10 @@
-name: Deploy Drip Dash to GitHub Pages
+name: GitHub Pages redirect to Vercel
+# The game lives on Vercel (https://drip-dash-nine.vercel.app/run/). GitHub Pages only serves redirect/.
 
 on:
   push:
     branches: [main]
-    paths: ['site/**', '.github/workflows/deploy-pages.yml']
+    paths: ['redirect/**', '.github/workflows/deploy-pages.yml']
   workflow_dispatch:
 
 permissions:
@@ -26,6 +27,6 @@ jobs:
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: site
+          path: redirect
       - id: deployment
         uses: actions/deploy-pages@v4

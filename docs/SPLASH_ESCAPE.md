@@ -1,6 +1,6 @@
 # Splash Escape: design and technical notes
 
-**Play:** https://dev-naga.github.io/drip-dash/splash/ · **Leaderboard:** https://dev-naga.github.io/drip-dash/leaderboard.html?game=splash
+**Play:** https://drip-dash-nine.vercel.app/splash/ · **Leaderboard:** https://drip-dash-nine.vercel.app/leaderboard.html?game=splash
 
 Splash Escape is the third game on the Drip Dash site. It's a 30–90 second arcade survival game set on a circular splash pad, **inCon-trol Water World**. It shares the site, the sign-up and the Supabase backend with Drip Dash and Bring Back the Flow.
 

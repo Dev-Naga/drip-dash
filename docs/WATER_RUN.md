@@ -1,6 +1,6 @@
 # Drip Dash: Water Run
 
-**Play:** https://dev-naga.github.io/drip-dash/run/ · **Leaderboard:** https://dev-naga.github.io/drip-dash/leaderboard.html?game=wrun
+**Play:** https://drip-dash-nine.vercel.app/run/ · **Leaderboard:** https://drip-dash-nine.vercel.app/leaderboard.html?game=wrun
 
 Water Run is a 3D, three-lane runner in the Drip Dash portal. Players run Drip along **the Water Trail**: eight real projects from the [inCon-trol gallery](https://incontrolwatersystems.com/gallery), in a row, from sunrise to evening.
 

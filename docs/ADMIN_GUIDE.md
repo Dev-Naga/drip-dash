@@ -168,7 +168,7 @@ If you change a level's scoring or timing, update its `maxScore` / `minSeconds` 
    ```sql
    insert into private.levels (id, title, max_score, min_ms) values ('S1', 'Freeze Watch', 7000, 30000);
    ```
-4. Push to `main`. GitHub Pages redeploys in about a minute. The new level's best score automatically adds to every player's Valley Score.
+4. Push to `main`. Vercel redeploys in about a minute. The new level's best score automatically adds to every player's Valley Score.
 
 ---
 
