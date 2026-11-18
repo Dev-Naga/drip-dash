@@ -3,22 +3,22 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-  <title>Water Run | Drip Dash by inCon-trol Water Systems</title>
+  <title>Drip Run | Drip Dash by inCon-trol Water Systems</title>
   <meta name="description" content="Race Drip along the Water Trail: a 3D runner through eight real inCon-trol water-feature projects, from Melissa Lake Park to Commons at Agora.">
   <meta name="theme-color" content="#005695">
-  <meta property="og:title" content="Drip Dash: Water Run by inCon-trol Water Systems">
+  <meta property="og:title" content="Drip Dash: Drip Run by inCon-trol Water Systems">
   <meta property="og:description" content="Dash, jump and slide through real-world inCon-trol water features. Top this month's leaderboard!">
   <meta property="og:image" content="../assets/og-card.jpg">
   <link rel="icon" href="../assets/drip-mascot.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Zilla+Slab:ital,wght@0,700;1,700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="../css/style.css?v=wr21">
+  <link rel="stylesheet" href="../css/style.css?v=wr24">
   <script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.min.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }</script>
 </head>
 <body class="game-page run-page">
   <main id="stage">
-    <canvas id="game" aria-label="Water Run. Left and right arrows or swipe to change lanes, up or swipe up to jump, down or swipe down to slide."></canvas>
+    <canvas id="game" aria-label="Drip Run. Left and right arrows or swipe to change lanes, up or swipe up to jump, down or swipe down to slide."></canvas>
 
     <div id="run-hud" hidden>
       <div class="rh-score"><b id="h-score">0</b><span id="h-dist">0 m</span></div>
@@ -55,10 +55,10 @@
     <!-- TITLE -->
     <section id="screen-title" class="screen" aria-label="Title">
       <div class="card title-card">
-        <a class="game-back" href="../">← Drip Dash games</a>
+        <nav class="nav-bar" aria-label="Drip Dash games"><a class="btn nav-home" href="../" title="Back to the Drip Dash home page"><svg class="nav-ic" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 11.5 12 4l9 7.5M5.5 9.5V20h5v-6h3v6h5V9.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Home</span></a></nav>
         <a class="brand" href="https://www.incontrolwatersystems.com" target="_blank" rel="noopener"><img src="../assets/logo-incontrol.png" alt="inCon-trol Water Systems" width="220"></a>
         <p class="kicker">Drip Dash</p>
-        <h1>Water Run</h1>
+        <h1>Drip Run</h1>
         <p class="tagline">Race the sunset along the Water Trail.</p>
         <p class="story" id="story">The fountains on the Water Trail are running dry. Drip, the last drop out of Melissa Lake Park's tipping bucket, has until nightfall to reach <b>Commons at Agora</b> and switch on the evening show, waking every water feature on the way.</p>
         <p class="month-banner" id="month-banner"></p>
@@ -129,12 +129,12 @@
         <p class="over-rank" id="over-rank"></p>
         <button id="btn-save" class="btn primary" hidden>Save this score</button>
         <button id="btn-again" class="btn primary big">Play again</button>
+        <a class="btn home" href="../" title="Back to the Drip Dash home page"><svg class="nav-ic" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 11.5 12 4l9 7.5M5.5 9.5V20h5v-6h3v6h5V9.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Home</span></a>
         <div class="row">
           <button id="btn-board2" class="btn">Leaderboard</button>
           <button id="btn-share" class="btn">Challenge a colleague</button>
         </div>
         <div class="row">
-          <a class="btn link" href="../">← Back to Drip Dash</a>
           <a class="btn link" href="https://incontrolwatersystems.com/gallery" target="_blank" rel="noopener">See the real projects ↗</a>
         </div>
       </div>
@@ -143,7 +143,7 @@
     <!-- LEADERBOARD -->
     <section id="screen-board" class="screen" hidden aria-label="Leaderboard">
       <div class="card board-card">
-        <h2>🏆 Water Run Leaderboard</h2>
+        <h2>🏆 Drip Run Leaderboard</h2>
         <div id="board"></div>
         <div class="row">
           <button class="btn primary" data-back>Back</button>
@@ -197,7 +197,7 @@
             <button id="btn-restart" class="btn">↻ Restart</button>
             <button id="btn-quit" class="btn">End run</button>
           </div>
-          <a class="btn link" href="../">← Back to Drip Dash</a>
+          <a class="btn home" href="../" title="Back to the Drip Dash home page"><svg class="nav-ic" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 11.5 12 4l9 7.5M5.5 9.5V20h5v-6h3v6h5V9.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Home</span></a>
         </div>
       </div>
     </section>
@@ -228,14 +228,14 @@
     <!-- NO WEBGL -->
     <section id="screen-nogl" class="screen" hidden aria-label="Not supported">
       <div class="card">
-        <h2>3D isn't available</h2>
-        <p>Water Run needs WebGL, which this browser or device has turned off. The other Drip Dash games work everywhere.</p>
+        <h2>Drip Run can't start on this device</h2>
+        <p>Drip Run needs WebGL, which this browser or device has turned off. The other Drip Dash games work everywhere.</p>
         <a class="btn primary big" href="../">Play Drip Dash</a>
       </div>
     </section>
 
     <div id="toast" role="status" hidden></div>
   </main>
-  <script type="module" src="../js/run-main.js?v=wr21"></script>
+  <script type="module" src="../js/run-main.js?v=wr24"></script>
 </body>
 </html>

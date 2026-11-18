@@ -30,6 +30,7 @@
     <!-- TITLE -->
     <section id="screen-title" class="screen" aria-label="Title">
       <div class="card title-card">
+        <nav class="nav-bar" aria-label="Drip Dash games"><a class="btn nav-home" href="../" title="Back to the Drip Dash home page"><svg class="nav-ic" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 11.5 12 4l9 7.5M5.5 9.5V20h5v-6h3v6h5V9.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Home</span></a></nav>
         <a class="brand" href="https://www.incontrolwatersystems.com" target="_blank" rel="noopener"><img src="../assets/logo-incontrol.png" alt="inCon-trol Water Systems" width="220"></a>
         <canvas class="mascot" id="title-spritz" width="220" height="250" aria-label="Spritz, the Splash Escape mascot"></canvas>
         <h1>Splash Escape</h1>
@@ -42,7 +43,7 @@
         </div>
         <button id="btn-ach" class="btn outfit-btn">🏅 Achievements</button>
         <p id="player-chip" class="player-chip" hidden></p>
-        <p class="game-switch-row"><a class="game-switch" href="../">← Drip Dash</a> <a class="game-switch" href="../run/">Water Run (3D) →</a></p>
+        <a class="btn link" href="../run/">Try Drip Run →</a>
       </div>
     </section>
 
@@ -107,13 +108,13 @@
         <p class="over-rank" id="over-rank"></p>
         <button id="btn-save" class="btn primary" hidden>Save this score</button>
         <button id="btn-again" class="btn primary big">Play again</button>
+        <a class="btn home" href="../" title="Back to the Drip Dash home page"><svg class="nav-ic" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 11.5 12 4l9 7.5M5.5 9.5V20h5v-6h3v6h5V9.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Home</span></a>
         <div class="row">
           <button id="btn-board2" class="btn">Leaderboard</button>
           <button id="btn-share" class="btn">Challenge a colleague</button>
         </div>
         <div class="row">
-          <a class="btn link" href="../">← Drip Dash</a>
-          <a class="btn link" href="../flow/">Bring Back the Flow →</a>
+          <a class="btn link" href="../flow/">Try Bring Back the Flow →</a>
         </div>
       </div>
     </section>
@@ -135,7 +136,8 @@
       <div class="card">
         <h2>Paused</h2>
         <button id="btn-resume" class="btn primary big">Resume</button>
-        <button id="btn-quit" class="btn link">End run</button>
+        <button id="btn-quit" class="btn">End run</button>
+        <a class="btn home" href="../" title="Back to the Drip Dash home page"><svg class="nav-ic" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 11.5 12 4l9 7.5M5.5 9.5V20h5v-6h3v6h5V9.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Home</span></a>
       </div>
     </section>
 

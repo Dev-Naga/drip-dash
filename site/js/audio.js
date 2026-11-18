@@ -77,7 +77,7 @@ export const sfx = {
   },
 };
 
-// ---------------------------------------------------------------- park ambience (Water Run)
+// ---------------------------------------------------------------- park ambience (Drip Run)
 // A looping filtered-noise "fountain" bed, plus birdsong by day and crickets in the evening. All synthesized.
 let amb = null;
 function ambNodes() {

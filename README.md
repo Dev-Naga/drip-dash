@@ -5,11 +5,11 @@ Four browser games share one site (the Drip Dash portal), one sign-up and one ba
 | Game | Where | What it is | Leaderboard |
 |---|---|---|---|
 | **Drip Dash** (main game) | `/` | One-tap endless runner: Drip races through turf fields, a pump station and a fountain plaza, dodging sprinklers, valve boxes, standpipes, low main lines and geysers | Best single run per player |
-| **Water Run** (3D) | `/run/` | Three-lane 3D runner (Three.js) along the Water Trail: Drip races from Melissa Lake Park to Commons at Agora through eight real inCon-trol gallery projects, waking the fountains, with branded billboards and clickable project signs | Best single run per player |
+| **Drip Run** (3D) | `/run/` | Three-lane 3D runner (Three.js) along the Water Trail: Drip races from Melissa Lake Park to Commons at Agora through eight real inCon-trol gallery projects, waking the fountains, with branded billboards and clickable project signs | Best single run per player |
 | **Bring Back the Flow** | `/flow/` | 7-level story adventure: restore Wellbrook's water systems by operating valves, pumps, VFDs, zones, a rain diverter, a water tower and a fountain show | Valley Score (best score on each level, added up) |
 | **Splash Escape** | `/splash/` | 30–90 s arcade survival on a circular splash pad: Spritz dodges falling drops, geysers, the rotating Big Fountain, jets, drains, fountain carts, sprinklers and splash waves | Best single run per player |
 
-Players switch games from the menus: the Drip Dash title screen has cards for the other games (Water Run is highlighted) and its game-over screen links to them; every other game links back to Drip Dash. The leaderboard page has a tab for each game. Details: [docs/WATER_RUN.md](docs/WATER_RUN.md), [docs/SPLASH_ESCAPE.md](docs/SPLASH_ESCAPE.md).
+Players switch games from the menus: the Drip Dash title screen has cards for the other games (Drip Run is highlighted) and its game-over screen links to them; every other game links back to Drip Dash. The leaderboard page has a tab for each game. Details: [docs/WATER_RUN.md](docs/WATER_RUN.md), [docs/SPLASH_ESCAPE.md](docs/SPLASH_ESCAPE.md).
 
 **Character customization (Drip Dash):** *Customize Drip* on the title screen (or *Change outfit* after a run) opens the outfit picker:
 - Classic Drip and Hard Hat are available from the start.
@@ -20,7 +20,7 @@ The chosen outfit is worn in the game and shown on the title screen. Bring Back 
 | | URL |
 |---|---|
 | **Game link (share this one)** | **https://drip-dash-nine.vercel.app/** (Drip Dash) |
-| Water Run (3D) | https://drip-dash-nine.vercel.app/run/ |
+| Drip Run (3D) | https://drip-dash-nine.vercel.app/run/ |
 | Bring Back the Flow | https://drip-dash-nine.vercel.app/flow/ |
 | Splash Escape | https://drip-dash-nine.vercel.app/splash/ |
 | Leaderboards | https://drip-dash-nine.vercel.app/leaderboard.html (add `?game=wrun`, `?game=flow` or `?game=splash`) |
@@ -36,7 +36,7 @@ The chosen outfit is worn in the game and shown on the title screen. Bring Back 
 - **Game:** plain HTML5 Canvas and JavaScript modules on a fixed 960×540 stage that scales to any screen. No framework, no build step, and all art is drawn in code. Portrait phones get a "rotate" prompt with a "play anyway" option.
 - **Hosting:** Vercel (project `drip-dash`, connected to this repo, redeploys on every push to `main`; config and security headers in `vercel.json`, which publishes the `site/` folder as-is with no build step). GitHub Pages no longer serves the game: `.github/workflows/deploy-pages.yml` publishes only the redirect pages in `redirect/`.
 - **Backend:** Supabase. `site/js/config.js` holds the project URL and the *publishable* key, which is meant to be public: the tables have RLS on with no policies, so the key can only call the game functions in `supabase/schema.sql`. Never put the `service_role` / secret key in the site.
-- **Backend:** Supabase Postgres (free tier). The browser calls 10 locked-down SQL functions. Water Run loads Three.js 0.160 from the jsDelivr CDN (pinned version). Per-level score limits and minimum durations live in `private.levels`. Schema: [`supabase/schema.sql`](supabase/schema.sql).
+- **Backend:** Supabase Postgres (free tier). The browser calls 10 locked-down SQL functions. Drip Run loads Three.js 0.160 from the jsDelivr CDN (pinned version). Per-level score limits and minimum durations live in `private.levels`. Schema: [`supabase/schema.sql`](supabase/schema.sql).
 - **Keep-alive:** `.github/workflows/supabase-keepalive.yml` pings Supabase daily so the free project doesn't pause.
 
 ## Folder map
@@ -46,9 +46,9 @@ site/
   js/game.js, main.js   runner engine (+ outfits) and runner screens
   flow/index.html       Bring Back the Flow: title, story, register, briefing, results, album, leaderboard
   js/flow-main.js       Flow screens
-  run/index.html        Water Run (3D): title, how-to, register, game over, leaderboard
-  js/run-game.js        Water Run engine: Three.js world, zones, obstacles, Drip in 3D
-  js/run-main.js        Water Run screens, swipe/keyboard/click controls, project panels
+  run/index.html        Drip Run (3D): title, how-to, register, game over, leaderboard
+  js/run-game.js        Drip Run engine: Three.js world, zones, obstacles, Drip in 3D
+  js/run-main.js        Drip Run screens, swipe/keyboard/click controls, project panels
   js/run-projects.js    Water Trail project list (verified gallery info) and photo sources
   splash/index.html     Splash Escape: title, how-to, achievements, register, game over, leaderboard
   js/splash-game.js     Splash Escape engine, arena art and Spritz the mascot

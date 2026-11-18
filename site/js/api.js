@@ -44,7 +44,7 @@ async function rpc(fn, args = {}) {
 //   'dash'   = Drip Dash runner (level 'RUN'): leaderboard = each player's best single run.
 //   'flow'   = Bring Back the Flow (levels L1…): leaderboard = Valley Score (best per level, summed).
 //   'splash' = Splash Escape (level 'SPLASH'): leaderboard = each player's best single run.
-//   'wrun'   = Drip Dash: Water Run (level 'WRUN'): leaderboard = each player's best single run.
+//   'wrun'   = Drip Dash: Drip Run (level 'WRUN'): leaderboard = each player's best single run.
 const GAME_OF = (level) => ({ RUN: 'dash', SPLASH: 'splash', WRUN: 'wrun' }[level] || 'flow');
 const live = {
   mode: 'live',

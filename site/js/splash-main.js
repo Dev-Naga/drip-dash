@@ -103,13 +103,14 @@ $('#form-register').addEventListener('submit', async (e) => {
   };
   if (data.name.length < 2) return (err.textContent = 'Please enter a display name (2–24 characters).');
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(data.email)) return (err.textContent = 'Please enter a valid email address.');
-  if (data.company.length < 2) return (err.textContent = 'Please enter your company.');
   if (!data.consent) return (err.textContent = 'Please accept the contest rules to join the leaderboard.');
   const btn = $('#btn-register'); btn.disabled = true; btn.textContent = 'Checking…';
   try {
     const co = await reg.resolve();                // confirm the company if the match is uncertain
     if (!co) return;                               // player chose to edit the company name
-    Object.assign(data, co); btn.textContent = 'Saving…';
+    Object.assign(data, co);                        // includes the email/company as confirmed above
+    if ((data.company || '').length < 2) { err.textContent = 'Please enter your company.'; $('#form-register').company.focus(); return; }
+    btn.textContent = 'Saving…';
     const res = await api.register(data);
     player = { player_key: res.player_key, display_name: res.display_name, company: res.company };
     store.set('dripdash.player', player);

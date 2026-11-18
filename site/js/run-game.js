@@ -1,4 +1,4 @@
-// Water Run — 3D three-lane runner along "The Water Trail": eight real inCon-trol projects in a row.
+// Drip Run — 3D three-lane runner along "The Water Trail": eight real inCon-trol projects in a row.
 // Story: the Trail's fountains are running dry. Drip races from Melissa Lake Park's splash pad to
 // Commons at Agora to switch on the evening show, waking every water feature as it passes.
 // The world scrolls toward the camera (+Z); Drip stays at z = 0 and switches lanes, jumps and slides.

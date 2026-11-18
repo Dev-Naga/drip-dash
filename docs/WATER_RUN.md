@@ -1,8 +1,8 @@
-# Drip Dash: Water Run
+# Drip Dash: Drip Run
 
 **Play:** https://drip-dash-nine.vercel.app/run/ · **Leaderboard:** https://drip-dash-nine.vercel.app/leaderboard.html?game=wrun
 
-Water Run is a 3D, three-lane runner in the Drip Dash portal. Players run Drip along **the Water Trail**: eight real projects from the [inCon-trol gallery](https://incontrolwatersystems.com/gallery), in a row, from sunrise to evening.
+Drip Run is a 3D, three-lane runner in the Drip Dash portal. Players run Drip along **the Water Trail**: eight real projects from the [inCon-trol gallery](https://incontrolwatersystems.com/gallery), in a row, from sunrise to evening.
 
 ## Story
 > The fountains on the Water Trail are running dry. Drip, the last drop out of Melissa Lake Park's tipping bucket, has until nightfall to reach **Commons at Agora** and switch on the evening show, waking every water feature on the way.
@@ -105,7 +105,7 @@ Opens with <kbd>Esc</kbd>/<kbd>P</kbd> or the ❚❚ button. It also opens autom
 - The field of view is fixed: no speed or boost zoom, and no run bob.
 - Drip shows the lane change instead: it leans, stretches sideways, hops slightly and leaves a spray trail.
 
-### Server checks for Water Run scores (`submit_water_run`)
+### Server checks for Drip Run scores (`submit_water_run`)
 - **Ticket:** a one-time server ticket for level `WRUN`. It can't be reused or used for another game.
 - **Run time:** checked against the server clock.
 - **Limits:**
@@ -215,7 +215,7 @@ Every simulated run passed the server checks in `submit_water_run` (see above). 
 - **Merging:** each 30 m section's static, opaque scenery (including seated people) is merged into one mesh per material. Because every stop and section is identical on each lap, the merge happens once and is cached. After that, updating the world takes about 1 ms per frame.
 - **Distance:** moving details (jets, walking people) are drawn only in the nearer sections. Far sections are fogged anyway.
 - **Draw calls:** desktop with shadows uses about 380–720 per frame; phones, with no real-time shadows, about 325. Phones also show fewer people and particles, and pixel ratio is capped at 1.5.
-- **Caching:** Water Run's scripts and CSS load with a `?v=` tag (in `site/run/index.html` and the imports in `run-main.js` / `run-game.js`). That stops a browser mixing old and new files for up to 10 minutes after a deploy. **Bump the tag on every change.**
+- **Caching:** Drip Run's scripts and CSS load with a `?v=` tag (in `site/run/index.html` and the imports in `run-main.js` / `run-game.js`). That stops a browser mixing old and new files for up to 10 minutes after a deploy. **Bump the tag on every change.**
 
 ## Files
 | File | What it holds |

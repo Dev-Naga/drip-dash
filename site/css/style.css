@@ -24,7 +24,8 @@ button { font: inherit; }
 #stage { position: fixed; inset: 0; touch-action: none; user-select: none; -webkit-user-select: none; background: linear-gradient(#9FD3F2, #EAF6FC); }
 #game { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 
-.screen { position: absolute; inset: 0; display: grid; place-items: center; padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom)); background: rgba(0, 38, 72, .38); backdrop-filter: blur(2px); overflow-y: auto; }
+.screen { position: absolute; inset: 0; display: grid; place-items: center; padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom)); background: rgba(0, 38, 72, .42); overflow-y: auto; }
+/* No backdrop blur on menu screens: re-blurring the animated game canvas every frame made slower devices stutter or freeze. */
 .screen[hidden] { display: none; }
 #screen-title { background: linear-gradient(rgba(0,38,72,.15), rgba(0,38,72,.45)); }
 
@@ -202,7 +203,7 @@ canvas.mascot { width: 92px; height: auto; display: block; margin: 4px auto 0; }
 .over-ach:empty { display: none; }
 .ach-list .ach-ic { font-size: 24px; }
 
-/* ---------------- Water Run */
+/* ---------------- Drip Run */
 .run-page #stage { background: #8fd3f4; }
 .run-page #screen-title { background: linear-gradient(rgba(0,38,72,.05), rgba(0,38,72,.35)); }
 .title-card { position: relative; }
@@ -240,7 +241,7 @@ canvas.mascot { width: 92px; height: auto; display: block; margin: 4px auto 0; }
 .game-back + .brand { margin-top: 18px; }
 #zone-banner { background: rgba(0,40,80,.6); border-radius: 18px; padding: 10px 22px 12px; max-width: calc(100vw - 32px); }
 
-/* ---------------- Water Run: story, journey, project signs */
+/* ---------------- Drip Run: story, journey, project signs */
 .story { font-size: 16px; line-height: 1.35; color: var(--deep); margin: 0 0 10px; }
 #journey { position: absolute; left: 50%; top: max(12px, env(safe-area-inset-top)); transform: translateX(-50%); width: min(46vw, 420px); z-index: 2; pointer-events: none; }
 .jr-track { height: 8px; background: rgba(0,40,80,.5); border-radius: 99px; overflow: hidden; border: 1px solid rgba(255,255,255,.5); }
@@ -278,7 +279,7 @@ canvas.mascot { width: 92px; height: auto; display: block; margin: 4px auto 0; }
 @media (max-width: 420px) { #journey { top: auto; bottom: max(118px, calc(env(safe-area-inset-bottom) + 112px)); left: 14px; right: 14px; width: auto; } }
 @media (max-width: 600px) { #proj-chip small { font-size: 11px; } #proj-chip b { font-size: 15px; } #proj-chip { padding: 6px 12px 6px 8px; } }
 
-/* ---------------- Water Run: water tank, mission, stop card */
+/* ---------------- Drip Run: water tank, mission, stop card */
 #mission { position: absolute; right: 10px; top: max(64px, calc(env(safe-area-inset-top) + 58px)); z-index: 2; width: min(280px, 46vw); background: rgba(0,40,80,.6); color: #fff; border-radius: 14px; padding: 8px 10px; pointer-events: none; }
 .ms-tank { display: flex; align-items: center; gap: 8px; }
 .ms-ico { font-size: 18px; }
@@ -309,7 +310,7 @@ canvas.mascot { width: 92px; height: auto; display: block; margin: 4px auto 0; }
 @media (prefers-reduced-motion: reduce) { #stop-card.go, #mission.good, #mission.bad { animation: none; } #stop-card.go .sc-timer { animation: sctime 4s linear forwards; } }
 #stop-card .sc-mission b { display: inline; font: inherit; font-weight: 700; margin: 0; color: var(--blue); }
 
-/* ---------------- Water Run: branded pause screen */
+/* ---------------- Drip Run: branded pause screen */
 .pause-screen { background: rgba(0, 22, 44, .5); backdrop-filter: blur(4px) saturate(.9); -webkit-backdrop-filter: blur(4px) saturate(.9); align-items: center; }
 .pause-card { width: min(760px, 100%); padding: 0; text-align: left; overflow: hidden; border-top: 0; display: flex; flex-direction: column; max-height: calc(100dvh - 32px); }
 .pz-hero { position: relative; height: 190px; flex: none; background: linear-gradient(135deg, #5D85B7, #003a66); }
@@ -369,3 +370,13 @@ canvas.mascot { width: 92px; height: auto; display: block; margin: 4px auto 0; }
 .form .co-confirm .btn small { display: block; font-weight: 500; opacity: .8; font-size: 13px; }
 .form .co-confirm .co-edit { text-align: center; }
 @media (prefers-reduced-motion: reduce) { .form input.autofill { animation: none; } }
+
+/* ---------------- Navigation: one Home control style for every game */
+/* Top of each game's title card: a clear pill button (icon + word), 44px tall touch target. */
+.nav-bar { display: flex; justify-content: flex-start; margin: -4px 0 6px; }
+.btn.nav-home { min-height: 44px; padding: 6px 16px 6px 12px; border-radius: 999px; font-size: 16px; text-transform: none; letter-spacing: 0; }
+/* Under "Play again" / "Next level" and on pause screens: full width, secondary to the primary action. */
+.btn.home { width: 100%; margin: 0 0 10px; text-transform: none; font-size: 18px; letter-spacing: 0; }
+.nav-ic { width: 20px; height: 20px; flex: none; }
+.btn.home .nav-ic { width: 22px; height: 22px; }
+.title-card > .btn.link[href] { display: inline-flex; margin-top: 10px; }

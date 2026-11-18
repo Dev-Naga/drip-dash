@@ -114,13 +114,14 @@ $('#form-register').addEventListener('submit', async (e) => {
   const d = { name: f.name.value.trim(), email: f.email.value.trim(), company: f.company.value.trim(), consent: f.consent.checked, optIn: f.optin.checked, hp: f.website.value, source: params.get('utm_campaign') || null };
   if (d.name.length < 2) return (err.textContent = 'Please enter a display name (2–24 characters).');
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(d.email)) return (err.textContent = 'Please enter a valid email address.');
-  if (d.company.length < 2) return (err.textContent = 'Please enter your company.');
   if (!d.consent) return (err.textContent = 'Please accept the contest rules to join the leaderboard.');
   const btn = $('#btn-register'); btn.disabled = true; btn.textContent = 'Checking…';
   try {
     const co = await reg.resolve();                // confirm the company if the match is uncertain
     if (!co) return;                               // player chose to edit the company name
-    Object.assign(d, co); btn.textContent = 'Saving…';
+    Object.assign(d, co);                        // includes the email/company as confirmed above
+    if ((d.company || '').length < 2) { err.textContent = 'Please enter your company.'; $('#form-register').company.focus(); return; }
+    btn.textContent = 'Saving…';
     const r = await api.register(d);
     player = { player_key: r.player_key, display_name: r.display_name, company: r.company };
     store.set('dripdash.player', player); toast(`${r.returning ? 'Welcome back' : 'Welcome'}, ${player.display_name}!`);

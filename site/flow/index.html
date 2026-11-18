@@ -30,6 +30,7 @@
     <!-- TITLE -->
     <section id="screen-title" class="screen" aria-label="Title">
       <div class="card title-card">
+        <nav class="nav-bar" aria-label="Drip Dash games"><a class="btn nav-home" href="../" title="Back to the Drip Dash home page"><svg class="nav-ic" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 11.5 12 4l9 7.5M5.5 9.5V20h5v-6h3v6h5V9.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Home</span></a></nav>
         <a class="brand" href="https://www.incontrolwatersystems.com" target="_blank" rel="noopener"><img src="../assets/logo-incontrol.png" alt="inCon-trol Water Systems" width="220"></a>
         <img class="mascot" src="../assets/drip-mascot.svg" alt="" width="96" height="120">
         <h1>Drip Dash</h1>
@@ -41,7 +42,7 @@
           <button id="btn-album2" class="btn">Album</button>
         </div>
         <p id="player-chip" class="player-chip" hidden></p>
-        <p class="game-switch-row"><a class="game-switch" href="../">← Back to Drip Dash (the runner)</a> <a class="game-switch" href="../run/">Water Run (3D) →</a></p>
+        <a class="btn link" href="../run/">Try Drip Run →</a>
       </div>
     </section>
 
@@ -112,6 +113,7 @@
         <p class="over-rank" id="rs-rank"></p>
         <button id="btn-save" class="btn primary" hidden>Save my score</button>
         <button id="btn-next" class="btn primary big">Next level</button>
+        <a class="btn home" href="../" title="Back to the Drip Dash home page"><svg class="nav-ic" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 11.5 12 4l9 7.5M5.5 9.5V20h5v-6h3v6h5V9.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Home</span></a>
         <div class="row">
           <button id="btn-replay" class="btn">Replay</button>
           <button class="btn" data-to="map">Map</button>
@@ -152,7 +154,8 @@
         <h2>Paused</h2>
         <button id="btn-resume" class="btn primary big">Resume</button>
         <button id="btn-restart" class="btn">Restart level</button>
-        <button class="btn link" id="btn-quit">Back to map</button>
+        <button class="btn" id="btn-quit">Back to map</button>
+        <a class="btn home" href="../" title="Back to the Drip Dash home page"><svg class="nav-ic" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 11.5 12 4l9 7.5M5.5 9.5V20h5v-6h3v6h5V9.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Home</span></a>
       </div>
     </section>
 

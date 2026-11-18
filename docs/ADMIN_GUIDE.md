@@ -43,7 +43,7 @@ Months follow **US Central time**. The leaderboard rolls over automatically at m
    select * from admin.dash_standings where month = '2026-11' limit 20;
    -- Bring Back the Flow: Valley Score (best score per level, added up) with a per-level breakdown
    select * from admin.flow_standings where month = '2026-11' limit 20;
-   -- Water Run (3D): best run per player (and their longest distance)
+   -- Drip Run (3D): best run per player (and their longest distance)
    select * from admin.water_run_standings where month = '2026-11' limit 20;
    -- Splash Escape: best run per player (and their longest survival time)
    select * from admin.splash_standings where month = '2026-11' limit 20;
@@ -79,7 +79,7 @@ update public.players set display_name = 'Player 123' where email_norm = 'someon
 |---|---|
 | Public leaderboard (month, all-time, companies, past winners) | `https://<your-site>/leaderboard.html` |
 | In-game leaderboard | **Leaderboard** button in the game, or `https://<your-site>/?view=leaderboard` |
-| Everything incl. emails (admins only) | Supabase → SQL Editor → `select * from admin.dash_standings;` (runner), `admin.water_run_standings` (Water Run), `admin.flow_standings` (Flow) or `admin.splash_standings` (Splash Escape) |
+| Everything incl. emails (admins only) | Supabase → SQL Editor → `select * from admin.dash_standings;` (runner), `admin.water_run_standings` (Drip Run), `admin.flow_standings` (Flow) or `admin.splash_standings` (Splash Escape) |
 | Raw tables | Supabase → Table Editor → `players`, `runs` |
 | Suspicious runs auto-rejected | `select * from admin.rejected_runs;` |
 

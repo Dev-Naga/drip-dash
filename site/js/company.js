@@ -172,16 +172,27 @@ export function enhanceRegistration(form, api) {
   coHint.after(panel);
 
   const st = { autofilled: false, guessed: false, chosen: null, seq: 0, timer: 0, typoOk: null };
+  // The open confirmation question (if any). Whatever closes the panel must also answer it, or the form would wait for an
+  // answer that can never come and "Checking…" would stay stuck (the old freeze after accepting a suggestion).
+  let pending = null, coveredHint = null;
+  function closePanel(answer = null) {
+    panel.hidden = true;
+    if (coveredHint) { coveredHint.hidden = false; coveredHint = null; }
+    const p = pending; pending = null;
+    if (p) p(answer);
+  }
+  // A lookup that never answers (bad network) must not hold the form: give up after 8 s and let the server decide.
+  const lookupCo = (email, company) => Promise.race([api.lookupCompany(email, company), new Promise((_, no) => setTimeout(() => no(new Error('timeout')), 8000))]);
   const setHint = (el, html, kind = '') => { el.innerHTML = html || ''; el.dataset.kind = kind; };
   const setCompany = (v) => { coIn.value = v; coIn.classList.remove('autofill'); void coIn.offsetWidth; coIn.classList.add('autofill'); };
 
   async function lookup() {
     const email = emailIn.value.trim(), d = emailDomain(email);
-    panel.hidden = true;
+    closePanel(null);
     if (!d || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) { setHint(emailHint, ''); return; }
     const my = ++st.seq;
     let res = null;
-    try { res = await api.lookupCompany(email, coIn.value.trim()); } catch { res = null; }
+    try { res = await lookupCo(email, coIn.value.trim()); } catch { res = null; }
     if (my !== st.seq) return;                                   // a newer keystroke won
     if (res ? res.personal_blocked : isPersonalDomain(d)) {
       setHint(emailHint, `✋ ${esc(PERSONAL_MSG(d))}`, 'bad'); emailIn.setAttribute('aria-invalid', 'true'); return;
@@ -191,7 +202,7 @@ export function enhanceRegistration(form, api) {
       const fixed = fixEmailDomain(email, d, res.domain_typo);
       setHint(emailHint, `Did you mean <b>${esc(fixed)}</b>? <button type="button" class="btn link typo-fix">Yes, fix it</button>`, 'warn');
       emailHint.querySelector('.typo-fix').onclick = () => { emailIn.value = fixed; emailIn.focus(); lookup(); };
-      if (isPersonalDomain(res.domain_typo)) return;
+      return;   // don't guess a company from a misspelled domain ("Incontolwatersystesm"); sort the email out first
     } else {
       setHint(emailHint, res?.domain ? `Business email ✔ <span class="muted">(${esc(res.domain)})</span>` : '', 'ok');
     }
@@ -216,18 +227,22 @@ export function enhanceRegistration(form, api) {
   const soon = () => { clearTimeout(st.timer); st.timer = setTimeout(lookup, 450); };
   emailIn.addEventListener('input', soon);
   emailIn.addEventListener('change', lookup);
-  coIn.addEventListener('input', () => { Object.assign(st, { autofilled: false, guessed: false, chosen: null }); setHint(coHint, ''); panel.hidden = true; coIn.classList.remove('autofill'); });
+  coIn.addEventListener('input', () => { Object.assign(st, { autofilled: false, guessed: false, chosen: null }); setHint(coHint, ''); closePanel(null); coIn.classList.remove('autofill'); });
   coIn.addEventListener('change', () => { if (emailIn.value.trim()) lookup(); });
 
   function ask(title, options, editInput = coIn, editLabel = '✎ Let me edit the company name') {
+    closePanel(null);                                            // never leave an earlier question unanswered
     return new Promise((resolve) => {
+      pending = resolve;
       panel.innerHTML = `<p class="co-q">${title}</p>${options.map((o, i) => `<button type="button" class="btn ${i === 0 ? 'primary' : ''} co-opt" data-i="${i}">${o.label}</button>`).join('')}<button type="button" class="btn link co-edit">${editLabel}</button>`;
-      (editInput === emailIn ? emailHint : coHint).after(panel);   // show the question under the field it is about
+      // show the question under the field it is about, in place of that field's suggestion (one message at a time)
+      coveredHint = editInput === emailIn ? emailHint : coHint;
+      coveredHint.after(panel); coveredHint.hidden = true;
       panel.hidden = false;
-      panel.querySelectorAll('.co-opt').forEach((b) => (b.onclick = () => { panel.hidden = true; resolve(options[+b.dataset.i].value); }));
-      panel.querySelector('.co-edit').onclick = () => { panel.hidden = true; editInput.focus(); editInput.select(); resolve(null); };
-      panel.querySelector('.co-opt')?.focus();
-      panel.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      panel.querySelectorAll('.co-opt').forEach((b) => (b.onclick = () => closePanel(options[+b.dataset.i].value)));
+      panel.querySelector('.co-edit').onclick = () => { closePanel(null); editInput.focus(); editInput.select(); };
+      panel.querySelector('.co-opt')?.focus({ preventScroll: true });
+      panel.scrollIntoView({ block: 'nearest' });
     });
   }
 
@@ -236,18 +251,18 @@ export function enhanceRegistration(form, api) {
       for (const k of ['email', 'name', 'company']) if (linkDetails[k] && !form[k].value) form[k].value = linkDetails[k];
       if (form.email.value) lookup();
     },
-    // Call on submit, after the basic checks. Resolves to fields for api.register (always including the email, which the
-    // player may have just corrected), or null if the player went back to edit.
+    // Call on submit, after the basic checks. Resolves to fields for api.register (always including the email and company,
+    // which the player may have just corrected or had filled in), or null if the player went back to edit.
     async resolve() {
       const r = await check();
-      return r && { ...r, email: emailIn.value.trim() };
+      return r && { ...r, email: emailIn.value.trim(), company: r.company || coIn.value.trim() };
     },
   };
 
   async function check() {
       const email = emailIn.value.trim(), typed = coIn.value.trim(), d = emailDomain(email);
       let res;
-      try { res = await api.lookupCompany(email, typed); } catch { res = null; }
+      try { res = await lookupCo(email, typed); } catch { res = null; }
       if (res ? res.personal_blocked : isPersonalDomain(d)) throw new Error(PERSONAL_MSG(d));
       if (!res) return {};                                       // offline: the server still decides safely (exact matches only)
       if (res.domain_typo && st.typoOk !== d) {
@@ -257,7 +272,8 @@ export function enhanceRegistration(form, api) {
         const pick = await ask(`Is your email <b>${esc(fixed)}</b>? <small>“${esc(d)}” looks like a typo of ${esc(res.domain_typo)}.</small>`,
           [{ label: 'Yes, fix my email', value: 'fix' }, { label: 'No, it’s typed correctly', value: 'keep' }], emailIn, '✎ Let me edit my email');
         if (!pick) return null;
-        if (pick === 'fix') { emailIn.value = fixed; await lookup(); } else st.typoOk = d;
+        if (pick === 'fix') emailIn.value = fixed; else st.typoOk = d;
+        await lookup();                                            // refresh the hints and company guess for the final email
         return check();
       }
       const typedKey = companyKey(typed), sugg = res.suggestions || [];
