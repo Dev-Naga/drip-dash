@@ -4,6 +4,7 @@ import { api, store, currentMonth, monthLabel } from './api.js';
 import { LIVE } from './config.js';
 import { sfx } from './audio.js';
 import { mountBoard } from './board.js';
+import { enhanceRegistration, linkDetails } from './company.js';
 
 const $ = (s) => document.querySelector(s);
 const screens = ['title', 'howto', 'register', 'over', 'board', 'pause', 'outfits'];
@@ -71,13 +72,8 @@ function renderTitle() {
 }
 
 // ---------------------------------------------------------------- registration
-function prefill() {
-  const f = $('#form-register');
-  for (const k of ['email', 'name', 'company']) {
-    const v = params.get(k);
-    if (v && !f[k].value && !/^\{\{.*\}\}$/.test(v)) f[k].value = v.slice(0, 120);
-  }
-}
+const reg = enhanceRegistration($('#form-register'), api);   // business email + company detection (js/company.js)
+function prefill() { reg.prefill(); }
 
 $('#form-register').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -92,8 +88,11 @@ $('#form-register').addEventListener('submit', async (e) => {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(data.email)) return (err.textContent = 'Please enter a valid email address.');
   if (data.company.length < 2) return (err.textContent = 'Please enter your company.');
   if (!data.consent) return (err.textContent = 'Please accept the contest rules to join the leaderboard.');
-  const btn = $('#btn-register'); btn.disabled = true; btn.textContent = 'Saving…';
+  const btn = $('#btn-register'); btn.disabled = true; btn.textContent = 'Checking…';
   try {
+    const co = await reg.resolve();                // confirm the company if the match is uncertain
+    if (!co) return;                               // player chose to edit the company name
+    Object.assign(data, co); btn.textContent = 'Saving…';
     const res = await api.register(data);
     player = { player_key: res.player_key, display_name: res.display_name, company: res.company };
     store.set('dripdash.player', player);
@@ -239,7 +238,7 @@ stage.addEventListener('contextmenu', (e) => e.preventDefault());
 
 // boot
 $('#demo-badge').hidden = LIVE;
-if (params.get('email') && !player) prefill();
+if (linkDetails.email && !player) prefill();
 // ---------------------------------------------------------------- outfits (character customization)
 // Unlocked by the player's best single run in this browser.
 const OUTFITS = [

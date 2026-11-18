@@ -1,5 +1,6 @@
 // Data layer: talks to Supabase RPC functions (LIVE) or a browser-only mock (DEMO).
 import { CONFIG, LIVE } from './config.js';
+import { companyNorm, companyKey, companyMatch, emailDomain, isPersonalDomain, guessFromDomain, PERSONAL_MSG } from './company.js';
 
 const LS = {
   get(k, d = null) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch { return d; } },
@@ -50,7 +51,9 @@ const live = {
   register: (p) => rpc('register_player', {
     p_email: p.email, p_name: p.name, p_company: p.company,
     p_consent: !!p.consent, p_opt_in: !!p.optIn, p_source: p.source || null, p_hp: p.hp || '',
+    p_company_id: p.companyId || null, p_new_company: !!p.newCompany,
   }),
+  lookupCompany: (email, company) => rpc('lookup_company', { p_email: email, p_company: company || null }),
   startRun: (playerKey, level = 'RUN') => rpc('start_run', { p_player_key: playerKey || null, p_level: level }),
   submitRun: (r) => (r.level === 'WRUN'
     ? rpc('submit_water_run', { p_run_id: r.runId, p_player_key: r.playerKey, p_score: r.score, p_duration_ms: r.durationMs, p_distance: r.distance, p_drops: r.drops, p_valves: r.valves, p_powerups: r.powerups, p_deliveries: r.deliveries || 0, p_stops: r.stopsDone || 0 })
@@ -105,13 +108,47 @@ function standings(runs, game) {
     return { key, score: v.reduce((s, x) => s + x.score, 0), levels: game === 'flow' ? m.size : null, at: Math.max(...v.map((x) => x.at)) };
   }).sort((a, b) => b.score - a.score || a.at - b.at);
 }
+// demo companies = the distinct (normalized) company names of this browser's demo players
+function demoCompanies(db) {
+  const by = new Map();
+  for (const p of Object.values(db.players)) {
+    const norm = companyNorm(p.company), id = norm.replace(/ /g, '');
+    if (!id) continue;
+    const c = by.get(id) || { id, name: p.company, norm, domains: new Set() };
+    const d = emailDomain(p.email); if (d && !isPersonalDomain(d) && !/example\.com$/.test(d)) c.domains.add(d);
+    by.set(id, c);
+  }
+  return [...by.values()];
+}
 const demo = {
   mode: 'demo',
   async register(p) {
     const db = demoDb(), email = p.email.trim().toLowerCase();
     let key = Object.keys(db.players).find((k) => db.players[k].email === email);
-    if (!key) { key = (crypto.randomUUID && crypto.randomUUID()) || String(Math.random()).slice(2); db.players[key] = { name: p.name.trim(), company: p.company.trim(), email }; LS.set(DEMO_KEY, db); }
+    if (!key) {
+      if (isPersonalDomain(emailDomain(email))) throw new Error(PERSONAL_MSG(emailDomain(email)));
+      const cos = demoCompanies(db), chosen = p.companyId && cos.find((c) => c.id === p.companyId);
+      const same = cos.find((c) => c.id === companyKey(p.company));
+      key = (crypto.randomUUID && crypto.randomUUID()) || String(Math.random()).slice(2);
+      db.players[key] = { name: p.name.trim(), company: (chosen || same)?.name || p.company.trim(), email }; LS.set(DEMO_KEY, db);
+    }
     return { player_key: key, display_name: db.players[key].name, company: db.players[key].company };
+  },
+  // Same answers as the live lookup_company, worked out from this browser's demo players.
+  async lookupCompany(email, company) {
+    const db = demoDb(), d = emailDomain(email), personal = isPersonalDomain(d), biz = personal ? null : d;
+    const cos = demoCompanies(db), norm = companyNorm(company), key = norm.replace(/ /g, '');
+    const byName = key && cos.find((c) => c.id === key);
+    const byDomain = biz && cos.find((c) => c.domains.has(biz));
+    const match = byName || byDomain || null;
+    const sugg = key ? cos.filter((c) => c !== match).map((c) => ({ id: c.id, name: c.name, ...companyMatch(norm, c.norm) })).filter((s) => s.score >= 0.5).sort((a, b) => b.score - a.score).slice(0, 4) : [];
+    return {
+      email_valid: !!d, domain: biz, personal, personal_blocked: personal,
+      match: match && { id: match.id, name: match.name }, via: byName ? 'name' : byDomain ? 'domain' : null,
+      domain_company: byName && byDomain && byName !== byDomain ? { id: byDomain.id, name: byDomain.name } : null,
+      suggestions: sugg, guess: !match && biz ? guessFromDomain(biz) : null,
+      needs_confirmation: !!(byName && byDomain && byName !== byDomain) || (!match && sugg.length > 0) || (!byName && byDomain && key !== byDomain.id),
+    };
   },
   async startRun(playerKey, level = 'RUN') { return { run_id: `demo-${level}-${Date.now()}` }; },
   async submitRun(r) {

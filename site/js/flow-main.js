@@ -7,6 +7,7 @@ import { api, store, currentMonth, monthLabel } from './api.js';
 import { LIVE } from './config.js';
 import { sfx } from './audio.js';
 import { mountBoard } from './board.js';
+import { enhanceRegistration, linkDetails } from './company.js';
 
 const $ = (s) => document.querySelector(s);
 // level photos are stored relative to the site root; this page lives in /flow/
@@ -105,10 +106,8 @@ function drawStory(ctx, t) {
 }
 
 // ---------------------------------------------------------------- registration
-function prefill() {
-  const f = $('#form-register');
-  for (const k of ['email', 'name', 'company']) { const v = params.get(k); if (v && !f[k].value && !/^\{\{.*\}\}$/.test(v)) f[k].value = v.slice(0, 120); }
-}
+const reg = enhanceRegistration($('#form-register'), api);   // business email + company detection (js/company.js)
+function prefill() { reg.prefill(); }
 $('#form-register').addEventListener('submit', async (e) => {
   e.preventDefault();
   const f = e.target, err = $('#reg-error'); err.textContent = '';
@@ -117,8 +116,11 @@ $('#form-register').addEventListener('submit', async (e) => {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(d.email)) return (err.textContent = 'Please enter a valid email address.');
   if (d.company.length < 2) return (err.textContent = 'Please enter your company.');
   if (!d.consent) return (err.textContent = 'Please accept the contest rules to join the leaderboard.');
-  const btn = $('#btn-register'); btn.disabled = true; btn.textContent = 'Saving…';
+  const btn = $('#btn-register'); btn.disabled = true; btn.textContent = 'Checking…';
   try {
+    const co = await reg.resolve();                // confirm the company if the match is uncertain
+    if (!co) return;                               // player chose to edit the company name
+    Object.assign(d, co); btn.textContent = 'Saving…';
     const r = await api.register(d);
     player = { player_key: r.player_key, display_name: r.display_name, company: r.company };
     store.set('dripdash.player', player); toast(`Welcome, ${player.display_name}!`);

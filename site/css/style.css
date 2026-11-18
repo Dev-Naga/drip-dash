@@ -352,3 +352,20 @@ canvas.mascot { width: 92px; height: auto; display: block; margin: 4px auto 0; }
 }
 @media (max-height: 520px) and (orientation: landscape) { .pz-hero { height: 110px; } .pz-blurb { display: none; } }
 #pop { max-width: calc(100vw - 24px); white-space: normal; text-align: center; }
+
+/* ---------------------------------------------------------------- sign-up: business email + company detection */
+.form .field-hint { display: block; min-height: 0; margin: 4px 2px 0; font-size: 14.5px; line-height: 1.35; color: var(--muted); }
+.form .field-hint:empty { display: none; }
+.form .field-hint[data-kind=ok] { color: #1b7f4a; }
+.form .field-hint[data-kind=warn] { color: #9a5b00; }
+.form .field-hint[data-kind=bad] { color: var(--danger); font-weight: 600; }
+.form input[aria-invalid=true] { border-color: var(--danger); }
+.form input.autofill { animation: coFill 1.2s ease-out; }
+@keyframes coFill { from { background: #e3fbff; } to { background: #fff; } }
+.form .co-confirm { margin: 10px 0 4px; padding: 12px; border: 2px solid var(--blue); border-radius: 12px; background: #f0fcff; }
+.form .co-confirm .co-q { margin: 0 0 8px; font-weight: 700; color: var(--deep); font-size: 16px; text-align: left; }
+.form .co-confirm .btn { display: block; width: 100%; margin: 6px 0 0; text-align: left; white-space: normal; }
+.form .co-confirm .btn.primary { margin-top: 6px; }
+.form .co-confirm .btn small { display: block; font-weight: 500; opacity: .8; font-size: 13px; }
+.form .co-confirm .co-edit { text-align: center; }
+@media (prefers-reduced-motion: reduce) { .form input.autofill { animation: none; } }

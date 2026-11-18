@@ -5,8 +5,8 @@
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { sfx } from './audio.js?v=wr17';
-import { PROJECTS, photoSources } from './run-projects.js?v=wr17';
+import { sfx } from './audio.js?v=wr18';
+import { PROJECTS, photoSources } from './run-projects.js?v=wr18';
 
 // Scoring rules — the server checks scores against these (supabase/schema.sql → submit_water_run).
 export const RULES = { DROP: 10, VALVE: 100, POWERUP: 25, MULT: 2, START_SPEED: 13, MAX_SPEED: 30, BOOST: 1.5,
