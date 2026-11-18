@@ -19,8 +19,8 @@ The chosen outfit is worn in the game and shown on the title screen. Bring Back 
 
 | | URL |
 |---|---|
-| **Game link (share this one)** | **https://drip-dash-nine.vercel.app/run/** (Water Run 3D) |
-| Drip Dash (runner) | https://drip-dash-nine.vercel.app/ |
+| **Game link (share this one)** | **https://drip-dash-nine.vercel.app/** (Drip Dash) |
+| Water Run (3D) | https://drip-dash-nine.vercel.app/run/ |
 | Bring Back the Flow | https://drip-dash-nine.vercel.app/flow/ |
 | Splash Escape | https://drip-dash-nine.vercel.app/splash/ |
 | Leaderboards | https://drip-dash-nine.vercel.app/leaderboard.html (add `?game=wrun`, `?game=flow` or `?game=splash`) |
@@ -29,7 +29,7 @@ The chosen outfit is worn in the game and shown on the title screen. Bring Back 
 
 > **Status: LIVE** with the shared Supabase leaderboard (connected 2026-11-17).
 > - Main site (Vercel): https://drip-dash-nine.vercel.app
-> - Old address https://dev-naga.github.io/drip-dash/ now only redirects here (home page → `/run/`, other pages → the same page on Vercel, `?query` and `#hash` kept). Its files are in `redirect/`.
+> - Old address https://dev-naga.github.io/drip-dash/ now only redirects here (home page → Drip Dash at `/`, other pages → the same page on Vercel, `?query` and `#hash` kept). Its files are in `redirect/`.
 > - Database: Supabase project "Games" (`kkhjnjwmhpzxnqjtprzw`). Admin views (`admin.*`) are in the Supabase SQL editor; see [docs/ADMIN_GUIDE.md](docs/ADMIN_GUIDE.md).
 
 ## Stack

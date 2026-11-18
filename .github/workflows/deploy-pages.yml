@@ -1,5 +1,5 @@
 name: GitHub Pages redirect to Vercel
-# The game lives on Vercel (https://drip-dash-nine.vercel.app/run/). GitHub Pages only serves redirect/.
+# The game lives on Vercel (https://drip-dash-nine.vercel.app/). GitHub Pages only serves redirect/.
 
 on:
   push:
