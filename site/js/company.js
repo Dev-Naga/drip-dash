@@ -236,13 +236,20 @@ export function enhanceRegistration(form, api) {
       for (const k of ['email', 'name', 'company']) if (linkDetails[k] && !form[k].value) form[k].value = linkDetails[k];
       if (form.email.value) lookup();
     },
-    // Call on submit, after the basic checks. Resolves to extra fields for api.register, or null if the player went back to edit.
+    // Call on submit, after the basic checks. Resolves to fields for api.register (always including the email, which the
+    // player may have just corrected), or null if the player went back to edit.
     async resolve() {
+      const r = await check();
+      return r && { ...r, email: emailIn.value.trim() };
+    },
+  };
+
+  async function check() {
       const email = emailIn.value.trim(), typed = coIn.value.trim(), d = emailDomain(email);
       let res;
       try { res = await api.lookupCompany(email, typed); } catch { res = null; }
       if (res ? res.personal_blocked : isPersonalDomain(d)) throw new Error(PERSONAL_MSG(d));
-      if (!res) return {};
+      if (!res) return {};                                       // offline: the server still decides safely (exact matches only)
       if (res.domain_typo && st.typoOk !== d) {
         // a mistyped domain would create a second player for the same person, so check before saving
         const fixed = fixEmailDomain(email, d, res.domain_typo);
@@ -251,8 +258,8 @@ export function enhanceRegistration(form, api) {
           [{ label: 'Yes, fix my email', value: 'fix' }, { label: 'No, it’s typed correctly', value: 'keep' }], emailIn, '✎ Let me edit my email');
         if (!pick) return null;
         if (pick === 'fix') { emailIn.value = fixed; await lookup(); } else st.typoOk = d;
-        return this.resolve();
-      }                                       // offline: the server still decides safely (exact matches only)
+        return check();
+      }
       const typedKey = companyKey(typed), sugg = res.suggestions || [];
       if (st.chosen && !st.guessed && companyKey(st.chosen.name) === typedKey) return { companyId: st.chosen.id };
       if (!res.needs_confirmation && !st.guessed && !(sugg.length && !res.match)) return res.match ? { companyId: res.match.id } : {};
@@ -272,6 +279,5 @@ export function enhanceRegistration(form, api) {
       if (choice?.companyId) { st.chosen = { id: choice.companyId, name: choice.company }; st.guessed = false; coIn.value = choice.company; }
       if (choice?.newCompany) st.guessed = false;
       return choice;
-    },
-  };
+  }
 }
