@@ -209,6 +209,8 @@ export function enhanceRegistration(form, api) {
       setHint(coHint, `We guessed this from <b>${esc(res.domain)}</b>. Please check it, and correct it if needed.`, 'warn');
     } else if (res.match && res.via === 'name') {
       setHint(coHint, `✔ ${esc(res.match.name)} is already on the leaderboard`, 'ok');
+      // the typed name is an exact match and the email domain doesn't point elsewhere: nothing left to confirm
+      if (!res.needs_confirmation) Object.assign(st, { chosen: res.match, guessed: false });
     }
   }
   const soon = () => { clearTimeout(st.timer); st.timer = setTimeout(lookup, 450); };
@@ -220,6 +222,7 @@ export function enhanceRegistration(form, api) {
   function ask(title, options, editInput = coIn, editLabel = '✎ Let me edit the company name') {
     return new Promise((resolve) => {
       panel.innerHTML = `<p class="co-q">${title}</p>${options.map((o, i) => `<button type="button" class="btn ${i === 0 ? 'primary' : ''} co-opt" data-i="${i}">${o.label}</button>`).join('')}<button type="button" class="btn link co-edit">${editLabel}</button>`;
+      (editInput === emailIn ? emailHint : coHint).after(panel);   // show the question under the field it is about
       panel.hidden = false;
       panel.querySelectorAll('.co-opt').forEach((b) => (b.onclick = () => { panel.hidden = true; resolve(options[+b.dataset.i].value); }));
       panel.querySelector('.co-edit').onclick = () => { panel.hidden = true; editInput.focus(); editInput.select(); resolve(null); };
@@ -245,7 +248,7 @@ export function enhanceRegistration(form, api) {
         const fixed = fixEmailDomain(email, d, res.domain_typo);
         if (isPersonalDomain(res.domain_typo)) throw new Error(`That looks like a typo of ${res.domain_typo}. ${PERSONAL_MSG('')}`);
         const pick = await ask(`Is your email <b>${esc(fixed)}</b>? <small>“${esc(d)}” looks like a typo of ${esc(res.domain_typo)}.</small>`,
-          [{ label: `Yes, use ${esc(fixed)}`, value: 'fix' }, { label: `No, ${esc(email)} is right`, value: 'keep' }], emailIn, '✎ Let me edit my email');
+          [{ label: 'Yes, fix my email', value: 'fix' }, { label: 'No, it’s typed correctly', value: 'keep' }], emailIn, '✎ Let me edit my email');
         if (!pick) return null;
         if (pick === 'fix') { emailIn.value = fixed; await lookup(); } else st.typoOk = d;
         return this.resolve();
