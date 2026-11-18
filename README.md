@@ -64,7 +64,7 @@ site/
   js/config.js          ← Supabase URL + publishable key go here
   assets/projects/      real project photos (resized from Egnyte marketing library)
 supabase/schema.sql     tables, level limits, anti-cheat, Valley Score leaderboards, admin views
-supabase/tests/         automated database tests (npm test)
+supabase/tests/         automated database tests (npm test): scoring/security + company matching
 docs/                   design doc, admin guide, newsletter snippet
 marketing/              newsletter hero images
 ```

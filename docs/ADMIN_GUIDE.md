@@ -91,19 +91,50 @@ Only people you invite to the Supabase project can see emails. The public websit
 
 **Recommendation: no live integration yet.** Use HubSpot for sending, and personalized links to pre-fill the form.
 
-### a) Newsletter link (pre-fills the player's email)
-Use HubSpot personalization tokens in the button link:
+### a) Newsletter link (pre-fills the player's details)
+Clicking a link in an email (Outlook or any other mail app) doesn't tell a website who you are. The only way to pass details is to put them in the link with your email tool's personalization tokens. **Prefer the `#` form**: everything after `#` stays in the reader's browser and is never sent to any web server or log.
 ```
-https://<your-site>/?email={{ contact.email }}&name={{ contact.firstname }}&company={{ contact.company }}&utm_source=hubspot&utm_medium=email&utm_campaign=newsletter-2026-11
+https://drip-dash-nine.vercel.app/?utm_source=newsletter&utm_campaign=2026-11#email={{ contact.email }}&name={{ contact.firstname }}&company={{ contact.company }}
 ```
-The game pre-fills the registration form from these values. If a token is empty, that field is simply left blank. The player still confirms and accepts the rules, so nobody gets registered without clicking.
+(`?email=…` also works, but then the address can end up in server logs.)
 
-> Privacy trade-off: putting `email=` in the link means the address appears in the browser history and the host's access logs. If you'd rather avoid that, drop `email=…` from the link and keep only `utm_…` (and optionally `name`/`company`). Players then type their email once on that device.
+What the game does with it:
+- Fills in the sign-up form, then **removes** the email, name and company from the address bar so they don't stay in history or get forwarded.
+- Ignores tokens your mail tool left unfilled (`{{…}}`, `*|…|*`, `%%…%%`, `[…]`).
+- Recognises the company from the email domain (see section 4c). The player still checks the details and accepts the rules, so nobody is registered without clicking.
+
+If you send from plain Outlook with no mail-merge, use a plain link with only the `utm_…` part. Players then type their work email once, and the company is filled in from its domain.
 
 ### b) Sync players back to HubSpot (monthly, about 5 minutes)
 1. Supabase → SQL Editor: `select * from admin.player_export;` → **Download CSV**.
 2. HubSpot → Contacts → **Import** → match on Email. Map `dash_best_score`, `water_run_best_score`, `splash_best_score`, `flow_valley_score`, `flow_levels_completed` and `games_played` to custom contact properties (create matching "Drip Dash …" properties once). Use `marketing_opt_in` to decide on newsletter subscription.
 3. You can then build HubSpot lists like "played Drip Dash this month" for follow-ups.
+
+### c) Company names: business email, auto-detection, duplicate review
+**Rules players see at sign-up (all four games):**
+- **Business email only.** New sign-ups with personal addresses (gmail.com, yahoo.com, outlook.com, hotmail.com, icloud.com, ISP addresses like comcast.net, throwaway addresses, …, including country versions like yahoo.co.uk) are refused with a friendly message. Players who registered before this rule keep working. To allow personal addresses (for example for a public contest): `select admin.allow_personal_email(true);`
+- **Company from the email domain.** `jane@mail.acme.com`, `bob@acme.com` → the same company. The first person from a domain creates the company; colleagues get it filled in automatically.
+- **Uncertain → the player decides.** If the name looks like an existing company (similar spelling, an abbreviation like "IWS", a shorter form like "inCon-trol", a shared distinctive first word, or a guess made from an unknown domain), the form asks: *"Is your company one of these?"* with the options and *"No, … is a different company"*.
+
+**Automatic (only when certain):** names that are the same after tidying (case, punctuation, "&"/"and", "Inc/LLC/Co/Ltd", "The …", common abbreviations like Intl/Svcs/Mfg, or a website typed as the name) are the same company. Everything else stays separate until a person decides. What each player typed is always kept (`admin.player_export.typed_company`).
+
+**Review queue (a few minutes a month, before announcing winners):**
+```sql
+select * from admin.company_review_queue;     -- possible duplicates, most likely first
+```
+Each row shows both companies, their player counts and email domains, the reason ("similar spelling", "abbreviation", "same email domain (…)"), and three ready-to-run statements:
+- `merge_b_into_a` / `merge_a_into_b`: copy one, run it. Players, domains and the old spelling move to the company you keep. It returns an `undo` statement.
+- `dismiss`: "not the same company"; the pair won't come back.
+
+Other tools:
+```sql
+select * from admin.company_directory;                 -- every company: players, domains, other spellings, merged-in names
+select * from admin.company_merges;                    -- merge history with undo statements
+select admin.undo_merge(<merge_id>);                   -- puts back exactly the players that were moved
+select admin.rename_company('<company id>', 'inCon-trol Water Systems');   -- fix how a name is shown; the old spelling still matches
+select admin.set_player_company('person@company.com', '<company id>');   -- move one player
+select admin.scan_duplicates();                        -- re-check all companies for look-alikes
+```
 
 ### Later (optional)
 A live sync (a Supabase Edge Function or a Zapier/Make zap calling HubSpot's contacts API whenever someone registers) needs a HubSpot **private app token**. Only add it if the monthly CSV becomes a chore.
