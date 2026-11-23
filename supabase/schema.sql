@@ -684,7 +684,7 @@ insert into private.worlds (id, name, sort, status, release_at, note) values
 on conflict (id) do nothing;
 
 create or replace function private.world_state(w private.worlds) returns text
-language sql stable as $$
+language sql stable set search_path = pg_catalog, private as $$
   select case
     when w.status = 'live' or (w.status = 'scheduled' and w.release_at <= now()) then 'live'
     when w.status = 'scheduled' then 'coming'
