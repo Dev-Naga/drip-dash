@@ -11,11 +11,11 @@
   // keeping ?query and #hash (newsletter links put the player's details there).
   (function () {
     var NEW = 'https://drip-dash-nine.vercel.app';
-    var KNOWN = ['/', '/run/', '/flow/', '/splash/', '/leaderboard.html', '/rules.html'];
+    var KNOWN = ['/', '/leaderboard.html', '/rules.html'];   // Drip Run is the only game: every other old page goes home
     var p = location.pathname.replace(/^\/drip-dash/, '').replace(/index\.html$/, '');
     if (p && p.charAt(p.length - 1) !== '/' && p.indexOf('.') < 0) p += '/';
     if (!p) p = '/';
-    var target = KNOWN.indexOf(p) >= 0 ? p : '/';         // the home page and anything unknown -> Drip Dash
+    var target = KNOWN.indexOf(p) >= 0 ? p : '/';         // the home page, old game pages and anything unknown -> Drip Run
     location.replace(NEW + target + location.search + location.hash);
   })();
 </script>

@@ -1,14 +1,23 @@
-// Runs supabase/schema.sql against an in-memory Postgres (PGlite) and checks security + scoring rules.
+// Runs supabase/schema.sql against an in-memory Postgres (PGlite) and checks security, Drip Run scoring,
+// worlds, display-name rules and that the retired games can't be reached.
 // Usage: cd supabase/tests && npm install && npm test
 import { PGlite } from '@electric-sql/pglite';
 import fs from 'node:fs';
+import * as N from '../../site/js/names.js';
 
 const sqlPath = process.argv[2] || '../schema.sql';
 const db = new PGlite();
-const q = async (s, p) => (await db.query(s, p)).rows;
+let ipN = 0;
+const q = async (s, p) => {
+  if (/register_player/.test(s)) await db.exec(`set request.headers = '{"x-forwarded-for":"10.1.${(ipN >> 8) & 255}.${ipN++ & 255}"}'`);
+  return (await db.query(s, p)).rows;
+};
+const one = async (s, p) => (await q(s, p))[0];
 let fails = 0;
 const ok = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); if (!c) fails++; };
-const expectErr = async (fn, m) => { try { await fn(); ok(false, m + ' (no error)'); } catch (e) { ok(true, m + ' -> ' + e.message); } };
+const expectErr = async (fn, re, m) => {
+  try { await fn(); ok(false, `${m} (no error)`); } catch (e) { ok(re.test(e.message), `${m} -> ${e.message}`); }
+};
 
 await db.exec('create role anon nologin; create role authenticated nologin;');
 const sql = fs.readFileSync(sqlPath, 'utf8');
@@ -18,233 +27,202 @@ await db.exec(`set request.headers = '{"x-forwarded-for":"1.2.3.4, 10.0.0.1"}'`)
 
 const asAnon = () => db.exec('set role anon');
 const asAdmin = () => db.exec('reset role');
+const reg = async (email, name, co = 'Acme Landscaping') => (await one(`select register_player($1,$2,$3,true) r`, [email, name, co])).r;
+
+// ================================================================ 1. nothing private is reachable
 await asAnon();
-await expectErr(() => q('select * from public.players'), 'anon cannot read players');
-await expectErr(() => q('select * from public.runs'), 'anon cannot read runs');
-await expectErr(() => q('select * from admin.player_export'), 'anon cannot read admin views');
-await expectErr(() => q('select * from private.levels'), 'anon cannot read level limits');
-await expectErr(() => q(`select register_player('a@b.com','Al','Co',false)`), 'consent required');
-await expectErr(() => q(`select register_player('bad','Al','Co',true)`), 'invalid email rejected');
-await expectErr(() => q(`select register_player('x@y.com','Al','Co',true,false,null,'spam')`), 'honeypot blocks bots');
+await expectErr(() => q('select * from public.players'), /permission/, 'anon cannot read players');
+await expectErr(() => q('select * from public.runs'), /permission/, 'anon cannot read runs');
+await expectErr(() => q('select * from admin.player_export'), /permission/, 'anon cannot read admin views');
+await expectErr(() => q('select * from private.levels'), /permission/, 'anon cannot read level limits');
+await expectErr(() => q('select * from private.worlds'), /permission/, 'anon cannot read the world schedule table');
+await expectErr(() => q(`select admin.set_world('aggie','live')`), /permission/, 'anon cannot change worlds');
+await expectErr(() => q(`select admin.rename_player('x@y.com','Hacker')`), /permission/, 'anon cannot rename players');
+await expectErr(() => q(`select private.name_problem('abc')`), /permission/, 'anon cannot call internal functions');
 
-const jane = (await q(`select register_player('Jane@Acme.com','Jane D.','Acme Landscaping',true,true,'nov') r`))[0].r;
-ok(jane.player_key && jane.display_name === 'Jane D.', 'register returns key');
-const jane2 = (await q(`select register_player('jane@acme.com ','Hacker','Evil',true) r`))[0].r;
-ok(jane2.player_key === jane.player_key && jane2.display_name === 'Jane D.', 'same email → same player, no rename');
-const bob = (await q(`select register_player('bob@builders.com','Bob B.','Acme Landscaping',true) r`))[0].r;
-const carl = (await q(`select register_player('carl@parks.gov','Carl','City Parks',true) r`))[0].r;
-
-async function play(key, level, secs, score, stars = 3) {
-  const t = (await q(`select start_run($1, $2) r`, [key, level]))[0].r;
-  await asAdmin(); await q(`update runs set started_at = now() - make_interval(secs => $1) where id = $2`, [secs + 1, t.run_id]); await asAnon();
-  return (await q(`select submit_level($1,$2,$3,$4,$5,$6) r`, [t.run_id, key, level, score, Math.round(secs * 1000), stars]))[0].r;
+// ================================================================ 2. the retired games can't be reached
+for (const f of ['submit_run(uuid,uuid,int,int,int,int,int)', 'submit_level(uuid,uuid,text,int,int,int)', 'submit_splash(uuid,uuid,int,int,int,int)']) {
+  await asAdmin();
+  const gone = (await one(`select to_regprocedure($1) is null g`, [`public.${f}`])).g;
+  ok(gone, `retired score function removed: ${f.split('(')[0]}`);
 }
-
-await expectErr(() => q(`select start_run($1, 'L99')`, [jane.player_key]), 'unknown level rejected');
-let r = await play(jane.player_key, 'L1', 30, 5800);
-ok(r.accepted && r.month_score === 5800 && r.month_rank === 1, `valid L1 run accepted (${JSON.stringify(r)})`);
-r = await play(jane.player_key, 'L2', 62, 5000);
-ok(r.accepted && r.month_score === 10800, 'valley score sums levels (5800+5000)');
-r = await play(jane.player_key, 'L1', 28, 5200);
-ok(r.accepted && r.month_score === 10800, 'worse replay does not lower valley score');
-r = await play(jane.player_key, 'L1', 26, 6100);
-ok(r.month_score === 11100, 'better replay raises valley score');
-r = await play(bob.player_key, 'L1', 40, 4500);
-ok(r.accepted && r.month_rank === 2, 'second player ranked #2');
-r = await play(carl.player_key, 'L3', 30, 6000);
-
-r = await play(jane.player_key, 'L3', 30, 99999);
-ok(!r.accepted && /maximum/.test(r.reason), `score above level max rejected (${r.reason})`);
-r = await play(jane.player_key, 'L7', 20, 5000);
-ok(!r.accepted && /fast/.test(r.reason), `impossibly fast finale rejected (${r.reason})`);
-r = await play(jane.player_key, 'L3', 30, 5000, 0);
-ok(!r.accepted && /stars/.test(r.reason), `zero-star submission rejected (${r.reason})`);
-{
-  const t = (await q(`select start_run($1,'L1') r`, [bob.player_key]))[0].r;
-  const x = (await q(`select submit_level($1,$2,'L1',5000,60000,3) r`, [t.run_id, bob.player_key]))[0].r;
-  ok(!x.accepted && /clock/.test(x.reason), `fake duration rejected (${x.reason})`);
-  await expectErr(() => q(`select submit_level($1,$2,'L1',5000,20000,3)`, [t.run_id, bob.player_key]), 'ticket reuse blocked');
-}
-{
-  const t = (await q(`select start_run($1,'L1') r`, [bob.player_key]))[0].r;
-  await asAdmin(); await q(`update runs set started_at = now() - interval '40 seconds' where id = $1`, [t.run_id]); await asAnon();
-  const x = (await q(`select submit_level($1,$2,'L5',5000,30000,3) r`, [t.run_id, bob.player_key]))[0].r;
-  ok(!x.accepted && /different level/.test(x.reason), `ticket for another level rejected (${x.reason})`);
-}
-{
-  const t = (await q(`select start_run($1,'L1') r`, [bob.player_key]))[0].r;
-  await expectErr(() => q(`select submit_level($1,$2,'L1',500,16000,1)`, [t.run_id, jane.player_key]), 'ticket of another player blocked');
-}
-{
-  const t = (await q(`select start_run(null,'L1') r`))[0].r;
-  await asAdmin(); await q(`update runs set started_at = now() - interval '25 seconds' where id = $1`, [t.run_id]); await asAnon();
-  const dee = (await q(`select register_player('dee@x.com','Dee','City Parks',true) r`))[0].r;
-  const x = (await q(`select submit_level($1,$2,'L1',4000,20000,2) r`, [t.run_id, dee.player_key]))[0].r;
-  ok(x.accepted, 'anonymous ticket claimed after registering');
-}
-
-const lb = await q(`select * from get_leaderboard('month', null, 10, 'flow')`);
-ok(lb[0].display_name === 'Jane D.' && Number(lb[0].score) === 11100 && Number(lb[0].levels) === 2 && !('email' in lb[0]), 'monthly valley leaderboard ' + JSON.stringify(lb.map((x) => [Number(x.rank), x.display_name, Number(x.score), Number(x.levels)])));
-const co = await q(`select * from get_company_board('month', 10, 'flow')`);
-ok(co[0].company === 'Acme Landscaping' && Number(co[0].total) === 15600, 'company board sums top 3 valley scores: ' + JSON.stringify(co.map((c) => [c.company, Number(c.total)])));
-
-await asAdmin();
-await q(`update runs set month = to_char((now() at time zone 'America/Chicago') - interval '1 month','YYYY-MM') where player_id = (select id from players where email_norm='bob@builders.com')`);
 await asAnon();
-const w = await q(`select * from get_monthly_winners(12, 'flow')`);
-ok(w.length === 1 && w[0].display_name === 'Bob B.', 'past winners ' + JSON.stringify(w.map((x) => [x.month, x.display_name, Number(x.score)])));
-const all = await q(`select * from get_leaderboard('all', null, 10, 'flow')`);
-ok(all.some((x) => x.display_name === 'Bob B.'), 'all-time board includes earlier months');
+for (const lv of ['RUN', 'SPLASH', 'L1', 'L7']) await expectErr(() => q(`select start_run(null, $1)`, [lv]), /Only Drip Run/, `start_run refuses retired level ${lv}`);
+for (const g of ['dash', 'flow', 'splash']) {
+  await expectErr(() => q(`select * from get_leaderboard('month', null, 10, $1)`, [g]), /Only Drip Run/, `leaderboard refuses game '${g}'`);
+  await expectErr(() => q(`select * from get_company_board('month', 10, $1)`, [g]), /Only Drip Run/, `company board refuses game '${g}'`);
+}
+const t0 = (await one(`select start_run(null) r`)).r;
+ok(!!t0.run_id, 'start_run defaults to Drip Run');
 
-await asAdmin(); await q(`update players set is_blocked = true where email_norm = 'carl@parks.gov'`); await asAnon();
-ok(!(await q(`select * from get_leaderboard('month', null, 10, 'flow')`)).some((x) => x.display_name === 'Carl'), 'blocked player hidden');
-await expectErr(async () => { for (let i = 0; i < 8; i++) await q(`select start_run($1,'L1')`, [jane.player_key]); }, 'per-player start rate limit');
+// ================================================================ 3. sign-up basics
+await expectErr(() => q(`select register_player('a@b.com','Alan','Co',false)`), /rules/, 'consent required');
+await expectErr(() => q(`select register_player('bad','Alan','Co',true)`), /valid email/, 'invalid email rejected');
+await expectErr(() => q(`select register_player('x@y.com','Alan','Co',true,false,null,'spam')`), /failed/, 'honeypot blocks bots');
+const jane = await reg('Jane@Acme.com', 'Jane D.');
+ok(jane.player_key && jane.display_name === 'Jane D.' && jane.returning === false, 'register returns key, new player');
+const jane2 = await reg('jane@acme.com ', 'Someone Else', 'Evil');
+ok(jane2.player_key === jane.player_key && jane2.display_name === 'Jane D.' && jane2.returning === true, 'same email → same player, name kept, "Welcome back"');
 
+// ================================================================ 4. display-name rules
+const BAD = [
+  ['Al', /3–24/], ['  B  ', /3–24/], ['x'.repeat(25), /3–24/], ['Bob<script>', /only use|remove </], ['Bob@Home', /only use/],
+  ['12345', /letter/], ['A..B', /punctuation/], ['Jo--hn', /punctuation/], ['Fuck You', /different/], ['ShitStorm', /different/],
+  ['Big Ass', /different/], ['B1g 4ss', /different/], ['Admin', /different/], ['The Moderator', /different/], ['inCon-trol', /different/],
+  ['Nazi Fan', /different/],
+];
+for (const [name, re] of BAD) {
+  await expectErr(() => reg(`bad${ipN}@acme.com`, name), re, `name refused: "${name}"`);
+}
+const GOOD = ['Cassie', 'Dickson Lee', "O'Brien", 'José M.', 'Mary-Kate', 'Ann_B 99', 'Scunthorpe Sam', 'Nazir', 'Swanky', 'Therapist Tim', 'Jane D. Smith'];
+for (const [i, name] of GOOD.entries()) {
+  const p = await reg(`good${i}@acme.com`, name);
+  ok(p.display_name === name, `name accepted: "${name}"`);
+}
+await expectErr(() => reg('copy@acme.com', 'jane d'), /taken/, 'duplicate name refused (case)');
+await expectErr(() => reg('copy2@acme.com', 'JANE-D'), /taken/, 'duplicate name refused (punctuation/spacing)');
+await expectErr(() => reg('copy3@acme.com', 'Jose M'), /taken/, 'duplicate name refused (accents)');
+let c = (await one(`select check_display_name('Jane D.') r`)).r;
+ok(!c.ok && c.taken, 'check_display_name: taken');
+c = (await one(`select check_display_name('Al') r`)).r;
+ok(!c.ok && /3–24/.test(c.message), 'check_display_name: too short');
+c = (await one(`select check_display_name('Brand New Name') r`)).r;
+ok(c.ok, 'check_display_name: available');
+// a name saved before the rules (2 characters) is replaced at the next sign-in
+await asAdmin(); await q(`insert into players (email, display_name, company) values ('kp@acme.com', 'KP', 'Acme Landscaping')`); await asAnon();
+await expectErr(() => reg('kp@acme.com', 'KP'), /new display name/, 'legacy short name must be replaced at sign-in');
+await expectErr(() => reg('kp@acme.com', 'Jane D.'), /taken/, 'replacement name must be free');
+const kp = await reg('kp@acme.com', 'Kim Park');
+ok(kp.display_name === 'Kim Park' && kp.returning, 'legacy short name replaced with a valid one');
+// a remembered (signed-in) player with a legacy name fixes it in-game with their player key
+await asAdmin(); await q(`insert into players (email, display_name, company) values ('jb@acme.com', 'JB', 'Acme Landscaping')`);
+const jbKey = (await one(`select player_key from players where email_norm = 'jb@acme.com'`)).player_key; await asAnon();
+await expectErr(() => q(`select fix_display_name($1, 'JB')`, [jbKey]), /3–24/, 'fix_display_name: new name must follow the rules');
+await expectErr(() => q(`select fix_display_name($1, 'Kim Park')`, [jbKey]), /taken/, 'fix_display_name: new name must be free');
+ok((await one(`select fix_display_name($1, 'Jordan B') r`, [jbKey])).r.display_name === 'Jordan B', 'fix_display_name: legacy name replaced');
+await expectErr(() => q(`select fix_display_name($1, 'Someone Else')`, [jbKey]), /already meets/, 'fix_display_name: valid names cannot be changed this way');
+await expectErr(() => q(`select fix_display_name(gen_random_uuid(), 'Ghost Rider')`), /Unknown player/, 'fix_display_name: needs a real player key');
 await asAdmin();
-const adm = await q(`select * from admin.flow_standings limit 5`);
-ok(adm.length >= 1 && adm[0].email && adm[0].per_level, 'admin standings view: ' + JSON.stringify(adm[0].per_level));
-const rej = await q(`select count(*)::int n from admin.rejected_runs`);
-ok(rej[0].n >= 5, `rejected runs recorded for review (${rej[0].n})`);
-
-// ---------------------------------------------------------------- Drip Dash runner ('dash')
+ok((await q(`select * from admin.names_to_fix`)).length === 0, 'admin.names_to_fix is empty after the fix');
+await expectErr(() => q(`update players set display_name = 'Kim-Park' where email_norm = 'jane@acme.com'`), /duplicate|unique/, 'unique index backs the rule');
+ok((await one(`select admin.rename_player('jane@acme.com', 'Jane Doe') r`)).r === 'renamed', 'admin can rename (rules apply)');
+await expectErr(() => q(`select admin.rename_player('jane@acme.com', 'Kim Park')`), /taken/, 'admin rename refuses a taken name');
 await asAnon();
-const erin = (await q(`select register_player('erin@acme.com','Erin','Acme Landscaping',true) r`))[0].r;
-async function dash(key, secs, score, dist, drops, valves) {
-  const t = (await q(`select start_run($1) r`, [key]))[0].r;            // default level = RUN
-  await asAdmin(); await q(`update runs set started_at = now() - make_interval(secs => $1) where id = $2`, [secs + 1, t.run_id]); await asAnon();
-  return (await q(`select submit_run($1,$2,$3,$4,$5,$6,$7) r`, [t.run_id, key, score, Math.round(secs * 1000), dist, drops, valves]))[0].r;
+// browser mirror gives the same answer on format rules
+for (const name of ['Al', 'Jane D.', "O'Brien", '12345', 'A..B', 'Bob<x>', 'José M.', 'x'.repeat(25), 'Ann_B 99']) {
+  const s = (await one(`select check_display_name($1) r`, [name])).r;
+  const js = N.nameProblem(name);
+  ok((s.ok || !!s.taken) === !js, `browser and server agree on "${name}" (${js || 'ok'})`);
 }
-r = await dash(erin.player_key, 40, 4200, 2600, 60, 3);
-ok(r.accepted && r.best_month === 4200 && r.month_rank === 1, `runner: valid run accepted (${JSON.stringify(r)})`);
-r = await dash(erin.player_key, 30, 3000, 1800, 40, 2);
-ok(r.accepted && r.best_month === 4200, 'runner: board keeps best single run (not a sum)');
-r = await dash(erin.player_key, 10, 99999, 900, 10, 0);
-ok(!r.accepted && /bonus/.test(r.reason), `runner: inflated score rejected (${r.reason})`);
-r = await dash(erin.player_key, 5, 2000, 2000, 0, 0);
-ok(!r.accepted && /distance/.test(r.reason), `runner: impossible distance rejected (${r.reason})`);
-{
-  const t = (await q(`select start_run($1,'L1') r`, [erin.player_key]))[0].r;
-  await asAdmin(); await q(`update runs set started_at = now() - interval '30 seconds' where id = $1`, [t.run_id]); await asAnon();
-  const x = (await q(`select submit_run($1,$2,500,20000,400,0,0) r`, [t.run_id, erin.player_key]))[0].r;
-  ok(!x.accepted && /not for Drip Dash/.test(x.reason), `runner: Flow ticket can't be used for a runner score (${x.reason})`);
-}
-{
-  const t = (await q(`select start_run($1) r`, [erin.player_key]))[0].r;
-  await asAdmin(); await q(`update runs set started_at = now() - interval '30 seconds' where id = $1`, [t.run_id]); await asAnon();
-  const x = (await q(`select submit_level($1,$2,'RUN',500,20000,3) r`, [t.run_id, erin.player_key]))[0].r;
-  ok(!x.accepted, 'runner ticket can\'t be submitted as a Flow level');
-}
-const dlb = await q(`select * from get_leaderboard('month', null, 10)`);
-ok(dlb.length === 1 && dlb[0].display_name === 'Erin' && Number(dlb[0].score) === 4200 && dlb[0].levels === null, 'runner board is the default and only has runner players ' + JSON.stringify(dlb.map((x) => [x.display_name, Number(x.score)])));
-const flb = await q(`select * from get_leaderboard('month', null, 10, 'flow')`);
-ok(!flb.some((x) => x.display_name === 'Erin'), 'Flow board does not include runner scores');
-const dco = await q(`select * from get_company_board('month', 10, 'dash')`);
-ok(dco.length === 1 && Number(dco[0].total) === 4200, 'runner company board');
-const me = (await q(`select get_player_summary($1) r`, [erin.player_key]))[0].r;
-const meFlow = (await q(`select get_player_summary($1, 'flow') r`, [erin.player_key]))[0].r;
-ok(me.best_month === 4200 && meFlow.month_score === 0, 'player summary is per game');
-await asAdmin();
-const dadm = await q(`select * from admin.dash_standings limit 5`);
-ok(dadm.length === 1 && dadm[0].email === 'erin@acme.com' && dadm[0].best_score === 4200, 'admin runner standings view');
-const exp = await q(`select * from admin.player_export where email = 'erin@acme.com'`);
-ok(exp[0].dash_best_score === 4200, 'player export includes both games');
 
-// ---------------------------------------------------------------- Splash Escape ('splash')
+// ================================================================ 5. worlds
+let w = (await one(`select get_worlds() r`)).r;
+const live = w.filter((x) => x.state === 'live').map((x) => x.id);
+ok(JSON.stringify(live) === JSON.stringify(['melissa', 'epic', 'mckinney', 'olympus']), `4 launch worlds live: ${live}`);
+ok(w.some((x) => x.state === 'coming' && x.release_at), 'upcoming worlds are listed with a release date');
+await asAdmin();
+await q(`update private.worlds set release_at = now() - interval '1 minute' where id = 'aggie'`);    // the 1st of the month arrives
 await asAnon();
-const fay = (await q(`select register_player('fay@acme.com','Fay','Acme Landscaping',true) r`))[0].r;
-async function splash(key, secs, score, drops, pups, level = 'SPLASH') {
-  const t = (await q(`select start_run($1, $2) r`, [key, level]))[0].r;
-  await asAdmin(); await q(`update runs set started_at = now() - make_interval(secs => $1) where id = $2`, [secs + 1, t.run_id]); await asAnon();
-  return (await q(`select submit_splash($1,$2,$3,$4,$5,$6) r`, [t.run_id, key, score, Math.round(secs * 1000), drops, pups]))[0].r;
-}
-r = await splash(fay.player_key, 62, 1900, 20, 4);
-ok(r.accepted && r.best_month === 1900 && r.month_rank === 1, `splash: valid run accepted (${JSON.stringify(r)})`);
-r = await splash(fay.player_key, 40, 900, 8, 2);
-ok(r.accepted && r.best_month === 1900, 'splash: board keeps best single run');
-r = await splash(fay.player_key, 30, 9000, 10, 1);
-ok(!r.accepted && /bonus/.test(r.reason), `splash: inflated score rejected (${r.reason})`);
-await asAdmin(); await q(`delete from runs where status = 'started'`); await asAnon();   // stay under the per-player start rate limit
-r = await splash(fay.player_key, 20, 500, 80, 0);
-ok(!r.accepted && /golden drops/.test(r.reason), `splash: impossible pickups rejected (${r.reason})`);
-r = await splash(fay.player_key, 2, 20, 0, 0);
-ok(!r.accepted && /short/.test(r.reason), `splash: too-short run rejected (${r.reason})`);
-{
-  const t = (await q(`select start_run(null,'RUN') r`))[0].r;
-  await asAdmin(); await q(`update runs set started_at = now() - interval '31 seconds' where id = $1`, [t.run_id]); await asAnon();
-  const x = (await q(`select submit_splash($1,$2,300,30000,0,0) r`, [t.run_id, fay.player_key]))[0].r;
-  ok(!x.accepted && /not for Splash/.test(x.reason), `splash: runner ticket can't post a splash score (${x.reason})`);
-}
-{
-  const t = (await q(`select start_run(null,'SPLASH') r`))[0].r;
-  await asAdmin(); await q(`update runs set started_at = now() - interval '30 seconds' where id = $1`, [t.run_id]); await asAnon();
-  const x = (await q(`select submit_run($1,$2,500,20000,400,0,0) r`, [t.run_id, fay.player_key]))[0].r;
-  ok(!x.accepted, 'splash ticket can\'t post a runner score');
-  await expectErr(() => q(`select submit_splash($1,$2,200,20000,0,0)`, [t.run_id, fay.player_key]), 'splash: ticket reuse blocked');
-}
-const slb = await q(`select * from get_leaderboard('month', null, 10, 'splash')`);
-ok(slb.length === 1 && slb[0].display_name === 'Fay' && Number(slb[0].score) === 1900, 'splash board only has splash players ' + JSON.stringify(slb.map((x) => [x.display_name, Number(x.score)])));
-ok(!(await q(`select * from get_leaderboard('month', null, 10)`)).some((x) => x.display_name === 'Fay'), 'runner board excludes splash scores');
-ok(!(await q(`select * from get_leaderboard('month', null, 10, 'flow')`)).some((x) => x.display_name === 'Fay'), 'Flow board excludes splash scores');
-ok(Number((await q(`select * from get_company_board('month', 10, 'splash')`))[0].total) === 1900, 'splash company board');
+w = (await one(`select get_worlds() r`)).r;
+ok(w.find((x) => x.id === 'aggie').state === 'live', 'scheduled world goes live on its release date with no deploy');
 await asAdmin();
-const sadm = await q(`select * from admin.splash_standings limit 5`);
-ok(sadm.length === 1 && sadm[0].email === 'fay@acme.com' && sadm[0].best_score === 1900, 'admin splash standings view');
-const sexp = await q(`select * from admin.player_export where email = 'fay@acme.com'`);
-ok(sexp[0].splash_best_score === 1900 && sexp[0].flow_valley_score === null, 'player export: splash best, not counted as Flow');
+ok(/locked/.test((await one(`select admin.set_world('epic', 'locked') r`)).r), 'admin can lock a world');
+await asAnon();
+w = (await one(`select get_worlds() r`)).r;
+ok(!w.some((x) => x.id === 'epic'), 'locked world is out of the rotation');
+await asAdmin();
+await q(`select admin.set_world('epic', 'live')`);
+await q(`select admin.set_world('chase', 'scheduled', now() + interval '40 days')`);
+ok((await one(`select state_now from admin.worlds where id = 'chase'`)).state_now === 'coming', 'admin can reschedule a world');
+await expectErr(async () => { for (const id of ['melissa', 'epic', 'mckinney', 'olympus', 'aggie']) await q(`select admin.set_world($1, 'locked')`, [id]); }, /At least one world/, 'the last live world cannot be locked');
+await q(`update private.worlds set status = 'live' where id in ('melissa','epic','mckinney','olympus')`);
+await q(`update private.worlds set status = 'scheduled', release_at = now() + interval '8 days' where id = 'aggie'`);
+ok(/added/.test((await one(`select admin.add_world('newpark', 'New Park', 9, 'scheduled', now() + interval '120 days') r`)).r), 'admin can add a future world');
+await expectErr(() => q(`select admin.set_world('aggie', 'scheduled')`), /release time/, 'scheduled needs a release time');
+await asAnon();
 
-// ---------------------------------------------------------------- Water Run ('wrun')
-await asAdmin(); await q(`delete from runs where status = 'started'`); await asAnon();
-const gus = (await q(`select register_player('gus@builders.com','Gus','Builders Inc',true) r`))[0].r;
-async function wrun(key, secs, score, dist, drops, valves, pups, level = 'WRUN') {
-  const t = (await q(`select start_run($1, $2) r`, [key, level]))[0].r;
+// ================================================================ 6. Drip Run scoring (endless) and tickets
+async function wrun(key, secs, score, dist, drops = 0, valves = 0, pups = 0, dels = 0, stops = 0) {
+  const t = (await one(`select start_run($1, 'WRUN') r`, [key])).r;
   await asAdmin(); await q(`update runs set started_at = now() - make_interval(secs => $1) where id = $2`, [secs + 1, t.run_id]); await asAnon();
-  return (await q(`select submit_water_run($1,$2,$3,$4,$5,$6,$7,$8) r`, [t.run_id, key, score, Math.round(secs * 1000), dist, drops, valves, pups]))[0].r;
+  return (await one(`select submit_water_run($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) r`, [t.run_id, key, score, Math.round(secs * 1000), dist, drops, valves, pups, dels, stops])).r;
 }
-r = await wrun(gus.player_key, 74, 3954, 1634, 147, 3, 4);
-ok(r.accepted && r.best_month === 3954 && r.month_rank === 1, `wrun: valid run accepted (${JSON.stringify(r)})`);
+const clear = async () => { await asAdmin(); await q(`delete from runs where status = 'started'`); await asAnon(); };
+const gus = await reg('gus@builders.com', 'Gus', 'Builders Inc');
+let r = await wrun(gus.player_key, 74, 3954, 1634, 147, 3, 4);
+ok(r.accepted && r.best_month === 3954 && r.month_rank === 1, `valid run accepted (${JSON.stringify(r)})`);
 r = await wrun(gus.player_key, 40, 1700, 708, 48, 2, 1);
-ok(r.accepted && r.best_month === 3954, 'wrun: board keeps best single run');
+ok(r.accepted && r.best_month === 3954, 'board keeps best single run');
+// endless: a long run past every world (20 minutes, 30 km) is fine if it is physically possible
+r = await wrun(gus.player_key, 1200, 40000 + 2000 + 40 * 150 + 13 * 300, 40000, 100, 0, 0, 40, 13);
+ok(r.accepted && r.best_month > 50000, `endless 20-minute run accepted (${r.reason || r.best_month})`);
 r = await wrun(gus.player_key, 30, 20000, 900, 30, 1, 1);
-ok(!r.accepted && /bonus/.test(r.reason), `wrun: inflated score rejected (${r.reason})`);
-await asAdmin(); await q(`delete from runs where status = 'started'`); await asAnon();
-r = await wrun(gus.player_key, 10, 3000, 3000, 0, 0, 0);
-ok(!r.accepted && /distance/.test(r.reason), `wrun: impossible distance rejected (${r.reason})`);
-r = await wrun(gus.player_key, 20, 2000, 500, 200, 0, 0);
-ok(!r.accepted && /drops/.test(r.reason), `wrun: impossible drops rejected (${r.reason})`);
-r = await wrun(gus.player_key, 30, 600, 500, 5, 0, 0, 'RUN');
-ok(!r.accepted && /not for Water Run/.test(r.reason), `wrun: runner ticket can't post a Water Run score (${r.reason})`);
-await asAdmin(); await q(`delete from runs where status = 'started'`); await asAnon();
+ok(!r.accepted && /bonus/.test(r.reason), `inflated score rejected (${r.reason})`);
+await clear();
+r = await wrun(gus.player_key, 10, 3000, 3000);
+ok(!r.accepted && /distance/.test(r.reason), `impossible distance rejected (${r.reason})`);
+r = await wrun(gus.player_key, 20, 2000, 500, 200);
+ok(!r.accepted && /drops/.test(r.reason), `impossible drops rejected (${r.reason})`);
+r = await wrun(gus.player_key, 0.5, 20, 10);
+ok(!r.accepted && /short/.test(r.reason), `too-short run rejected (${r.reason})`);
+await clear();
+r = await wrun(gus.player_key, 30, 600 + 40 * 150, 600, 0, 0, 0, 40, 0);
+ok(!r.accepted && /deliveries/.test(r.reason), `impossible deliveries rejected (${r.reason})`);
+r = await wrun(gus.player_key, 30, 600 + 2 * 150 + 2 * 300, 600, 0, 0, 0, 2, 2);
+ok(!r.accepted && /stops/.test(r.reason), `stops without 3 deliveries each rejected (${r.reason})`);
+await clear();
 {
-  const t = (await q(`select start_run($1,'WRUN') r`, [gus.player_key]))[0].r;
-  await asAdmin(); await q(`update runs set started_at = now() - interval '30 seconds' where id = $1`, [t.run_id]); await asAnon();
-  const x = (await q(`select submit_run($1,$2,500,20000,400,0,0) r`, [t.run_id, gus.player_key]))[0].r;
-  ok(!x.accepted, 'Water Run ticket can\'t post a Drip Dash score');
+  const t = (await one(`select start_run($1,'WRUN') r`, [gus.player_key])).r;
+  const x = (await one(`select submit_water_run($1,$2,5000,60000,2000,10,0,0) r`, [t.run_id, gus.player_key])).r;
+  ok(!x.accepted && /clock/.test(x.reason), `duration longer than the server clock rejected (${x.reason})`);
+  await expectErr(() => q(`select submit_water_run($1,$2,100,2000,50,0,0,0)`, [t.run_id, gus.player_key]), /already submitted/, 'a ticket can be submitted only once');
 }
-// water deliveries: 3 inlets per 300 m stop (150 each) + 300 per completed stop
-await asAdmin(); await q(`delete from runs where status = 'started'`); await asAnon();
-async function wrun2(key, secs, score, dist, drops, valves, pups, dels, stops) {
-  const t = (await q(`select start_run($1, 'WRUN') r`, [key]))[0].r;
-  await asAdmin(); await q(`update runs set started_at = now() - make_interval(secs => $1) where id = $2`, [secs + 1, t.run_id]); await asAnon();
-  return (await q(`select submit_water_run($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) r`, [t.run_id, key, score, Math.round(secs * 1000), dist, drops, valves, pups, dels, stops]))[0].r;
+{
+  const t = (await one(`select start_run($1,'WRUN') r`, [gus.player_key])).r;
+  await expectErr(() => q(`select submit_water_run($1,$2,100,2000,50,0,0,0)`, [t.run_id, jane.player_key]), /another player/, 'ticket of another player blocked');
+  await expectErr(() => q(`select submit_water_run(gen_random_uuid(),$1,100,2000,50,0,0,0)`, [gus.player_key]), /Unknown game ticket/, 'made-up ticket refused');
+  await expectErr(() => q(`select submit_water_run($1,gen_random_uuid(),100,2000,50,0,0,0)`, [t.run_id]), /Unknown player/, 'made-up player refused');
 }
-r = await wrun2(gus.player_key, 60, 1200 + 400 + 9 * 150 + 3 * 300, 1200, 40, 0, 0, 9, 3);
-ok(r.accepted, `wrun: deliveries + completed stops accepted (${r.reason})`);
-r = await wrun2(gus.player_key, 30, 600 + 40 * 150, 600, 0, 0, 0, 40, 0);
-ok(!r.accepted && /deliveries/.test(r.reason), `wrun: impossible deliveries rejected (${r.reason})`);
-await asAdmin(); await q(`delete from runs where status = 'started'`); await asAnon();
-r = await wrun2(gus.player_key, 30, 600 + 2 * 150 + 2 * 300, 600, 0, 0, 0, 2, 2);
-ok(!r.accepted && /stops/.test(r.reason), `wrun: stops without 3 deliveries each rejected (${r.reason})`);
-r = await wrun2(gus.player_key, 30, 600 + 3 * 150 + 5000, 600, 0, 0, 0, 3, 1);
-ok(!r.accepted && /bonus/.test(r.reason), `wrun: inflated delivery score rejected (${r.reason})`);
-const wlb = await q(`select * from get_leaderboard('month', null, 10, 'wrun')`);
-ok(wlb.length === 1 && wlb[0].display_name === 'Gus' && Number(wlb[0].score) === 3954, 'wrun board only has Water Run players ' + JSON.stringify(wlb.map((x) => [x.display_name, Number(x.score)])));
-ok(!(await q(`select * from get_leaderboard('month', null, 10)`)).some((x) => x.display_name === 'Gus'), 'Drip Dash board excludes Water Run scores');
-ok(!(await q(`select * from get_leaderboard('month', null, 10, 'splash')`)).some((x) => x.display_name === 'Gus'), 'Splash board excludes Water Run scores');
-ok(!(await q(`select * from get_leaderboard('month', null, 10, 'flow')`)).some((x) => x.display_name === 'Gus'), 'Flow board excludes Water Run scores');
+await clear();
+{
+  const t = (await one(`select start_run(null,'WRUN') r`)).r;
+  await asAdmin(); await q(`update runs set started_at = now() - interval '31 seconds' where id = $1`, [t.run_id]); await asAnon();
+  const dee = await reg('dee@x.com', 'Dee Dee', 'City Parks');
+  const x = (await one(`select submit_water_run($1,$2,800,30000,700,5,0,0) r`, [t.run_id, dee.player_key])).r;
+  ok(x.accepted, 'anonymous ticket claimed after registering (score kept for the right player)');
+}
+await clear();
+await expectErr(async () => { for (let i = 0; i < 8; i++) await q(`select start_run($1,'WRUN')`, [gus.player_key]); }, /Slow down/, 'per-player start rate limit');
+await clear();
+
+// ================================================================ 7. leaderboards
+const wlb = await q(`select * from get_leaderboard('month', null, 10)`);
+ok(wlb[0].display_name === 'Gus' && Number(wlb[0].score) > 50000 && !('email' in wlb[0]), 'leaderboard: best run first, no emails ' + JSON.stringify(wlb.map((x) => [x.display_name, Number(x.score)])));
+ok(wlb.every((x, i) => Number(x.rank) === i + 1) && wlb.every((x, i) => i === 0 || Number(wlb[i - 1].score) >= Number(x.score)), 'ranks are consecutive and sorted');
+ok(new Set(wlb.map((x) => x.display_name)).size === wlb.length, 'one row per player');
+const cb = await q(`select * from get_company_board('month', 10)`);
+ok(cb.length >= 2 && cb[0].company === 'Builders Inc', 'company board ' + JSON.stringify(cb.map((x) => [x.company, Number(x.total)])));
+await asAdmin(); await q(`update players set is_blocked = true where email_norm = 'gus@builders.com'`); await asAnon();
+ok(!(await q(`select * from get_leaderboard('month', null, 10)`)).some((x) => x.display_name === 'Gus'), 'blocked player hidden');
+{
+  const t = (await one(`select start_run($1,'WRUN') r`, [gus.player_key])).r;
+  await asAdmin(); await q(`update runs set started_at = now() - interval '20 seconds' where id = $1`, [t.run_id]); await asAnon();
+  await expectErr(() => q(`select submit_water_run($1,$2,100,10000,90,0,0,0)`, [t.run_id, gus.player_key]), /not eligible/, 'blocked player cannot submit');
+}
+await asAdmin(); await q(`update players set is_blocked = false where email_norm = 'gus@builders.com'`);
+await q(`update runs set month = to_char((now() at time zone 'America/Chicago') - interval '1 month','YYYY-MM') where player_id = (select id from players where email_norm='dee@x.com')`);
+await asAnon();
+const wn = await q(`select * from get_monthly_winners(12)`);
+ok(wn.length === 1 && wn[0].display_name === 'Dee Dee', 'past winners ' + JSON.stringify(wn.map((x) => [x.month, x.display_name])));
+ok((await q(`select * from get_leaderboard('all', null, 10)`)).some((x) => x.display_name === 'Dee Dee'), 'all-time board includes earlier months');
+const me = (await one(`select get_player_summary($1) r`, [gus.player_key])).r;
+ok(me.best_month > 50000 && me.month_rank === 1, 'player summary');
+await expectErr(() => q(`select get_player_summary($1, 'flow')`, [gus.player_key]), /Only Drip Run/, 'player summary refuses retired games');
+
+// ================================================================ 8. admin views still work
 await asAdmin();
 const wadm = await q(`select * from admin.water_run_standings limit 5`);
-ok(wadm.length === 1 && wadm[0].email === 'gus@builders.com' && wadm[0].best_score === 3954, 'admin Water Run standings view');
-const wexp = await q(`select * from admin.player_export where email = 'gus@builders.com'`);
-ok(wexp[0].water_run_best_score === 3954 && wexp[0].flow_valley_score === null && wexp[0].dash_best_score === null, 'player export: Water Run best, not counted elsewhere');
+ok(wadm.length >= 1 && wadm[0].email, 'admin Drip Run standings view');
+ok((await q(`select count(*)::int n from admin.rejected_runs`))[0].n >= 5, 'rejected runs recorded for review');
 console.log(fails ? `\n${fails} FAILURE(S)` : '\nALL TESTS PASSED');
 process.exit(fails ? 1 : 0);

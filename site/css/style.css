@@ -380,3 +380,12 @@ canvas.mascot { width: 92px; height: auto; display: block; margin: 4px auto 0; }
 .nav-ic { width: 20px; height: 20px; flex: none; }
 .btn.home .nav-ic { width: 22px; height: 22px; }
 .title-card > .btn.link[href] { display: inline-flex; margin-top: 10px; }
+
+/* ---------------- Drip Run: worlds, results states, name check */
+.next-world { display: inline-block; margin-top: 6px; color: var(--deep); }
+.trail-list .tl-lock { display: flex; gap: 10px; align-items: center; padding: 8px 6px; border-bottom: 1px solid var(--mist); opacity: .75; }
+.trail-list li.locked .tl-n { background: var(--mist); color: var(--ink); }
+.over-rank[data-kind=ok] { color: #1b7f4a; }
+.over-rank[data-kind=bad] { color: var(--danger); }
+.over-rank[data-kind=busy] { color: var(--muted); }
+.board-body .retry { margin-top: 8px; }

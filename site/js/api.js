@@ -1,6 +1,10 @@
 // Data layer: talks to Supabase RPC functions (LIVE) or a browser-only mock (DEMO).
 import { CONFIG, LIVE } from './config.js';
 import { companyNorm, companyKey, companyMatch, emailDomain, isPersonalDomain, guessFromDomain, domainTypo, PERSONAL_MSG } from './company.js';
+import { nameProblem, nameKey } from './names.js';
+
+// demo mode only: the launch worlds (live mode reads the real schedule with get_worlds)
+const DEFAULT_WORLD_LIST = ['melissa', 'epic', 'mckinney', 'olympus'].map((id, i) => ({ id, sort: i + 1, state: 'live' }));
 
 const LS = {
   get(k, d = null) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch { return d; } },
@@ -40,12 +44,9 @@ async function rpc(fn, args = {}) {
   return data;
 }
 
-// Four games share one backend:
-//   'dash'   = Drip Dash runner (level 'RUN'): leaderboard = each player's best single run.
-//   'flow'   = Bring Back the Flow (levels L1…): leaderboard = Valley Score (best per level, summed).
-//   'splash' = Splash Escape (level 'SPLASH'): leaderboard = each player's best single run.
-//   'wrun'   = Drip Dash: Drip Run (level 'WRUN'): leaderboard = each player's best single run.
-const GAME_OF = (level) => ({ RUN: 'dash', SPLASH: 'splash', WRUN: 'wrun' }[level] || 'flow');
+// Drip Run is the only game (level 'WRUN', game 'wrun'): the leaderboard is each player's best single run.
+// The server refuses every other game, so nothing else is called from here.
+const GAME_OF = () => 'wrun';
 const live = {
   mode: 'live',
   register: (p) => rpc('register_player', {
@@ -54,22 +55,19 @@ const live = {
     p_company_id: p.companyId || null, p_new_company: !!p.newCompany,
   }),
   lookupCompany: (email, company) => rpc('lookup_company', { p_email: email, p_company: company || null }),
-  startRun: (playerKey, level = 'RUN') => rpc('start_run', { p_player_key: playerKey || null, p_level: level }),
-  submitRun: (r) => (r.level === 'WRUN'
-    ? rpc('submit_water_run', { p_run_id: r.runId, p_player_key: r.playerKey, p_score: r.score, p_duration_ms: r.durationMs, p_distance: r.distance, p_drops: r.drops, p_valves: r.valves, p_powerups: r.powerups, p_deliveries: r.deliveries || 0, p_stops: r.stopsDone || 0 })
-    : r.level === 'SPLASH'
-    ? rpc('submit_splash', { p_run_id: r.runId, p_player_key: r.playerKey, p_score: r.score, p_duration_ms: r.durationMs, p_drops: r.drops, p_powerups: r.powerups })
-    : r.level && r.level !== 'RUN'
-    ? rpc('submit_level', { p_run_id: r.runId, p_player_key: r.playerKey, p_level: r.level, p_score: r.score, p_duration_ms: r.durationMs, p_stars: r.stars })
-    : rpc('submit_run', { p_run_id: r.runId, p_player_key: r.playerKey, p_score: r.score, p_duration_ms: r.durationMs, p_distance: r.distance, p_drops: r.drops, p_valves: r.valves })),
-  leaderboard: (period, limit = 50, game = 'dash') => rpc('get_leaderboard', { p_period: period, p_month: null, p_limit: limit, p_game: game }),
-  companies: (period, game = 'dash') => rpc('get_company_board', { p_period: period, p_limit: 25, p_game: game }),
-  winners: (game = 'dash') => rpc('get_monthly_winners', { p_months: 12, p_game: game }),
-  me: (playerKey, game = 'dash') => rpc('get_player_summary', { p_player_key: playerKey, p_game: game }),
+  checkName: (name) => rpc('check_display_name', { p_name: name }),
+  fixName: (playerKey, name) => rpc('fix_display_name', { p_player_key: playerKey, p_name: name }),
+  worlds: () => rpc('get_worlds'),
+  startRun: (playerKey) => rpc('start_run', { p_player_key: playerKey || null, p_level: 'WRUN' }),
+  submitRun: (r) => rpc('submit_water_run', { p_run_id: r.runId, p_player_key: r.playerKey, p_score: r.score, p_duration_ms: r.durationMs, p_distance: r.distance, p_drops: r.drops, p_valves: r.valves, p_powerups: r.powerups, p_deliveries: r.deliveries || 0, p_stops: r.stopsDone || 0 }),
+  leaderboard: (period, limit = 50) => rpc('get_leaderboard', { p_period: period, p_month: null, p_limit: limit, p_game: 'wrun' }),
+  companies: (period) => rpc('get_company_board', { p_period: period, p_limit: 25, p_game: 'wrun' }),
+  winners: () => rpc('get_monthly_winners', { p_months: 12, p_game: 'wrun' }),
+  me: (playerKey) => rpc('get_player_summary', { p_player_key: playerKey, p_game: 'wrun' }),
 };
 
 // ---------------------------------------------------------------- DEMO (this browser only) — mirrors the server rules
-const DEMO_KEY = 'dripdash.demo.v5';
+const DEMO_KEY = 'driprun.demo.v1';
 function demoDb() {
   let db = LS.get(DEMO_KEY);
   if (!db) {
@@ -79,16 +77,8 @@ function demoDb() {
     sample.forEach(([name, company, dash, levels], i) => {
       const key = `sample-${i}`;
       db.players[key] = { name, company, email: `sample${i}@example.com` };
-      db.runs.push({ key, level: 'RUN', score: dash, month: m, at: now - i * 3600e3 });
-      db.runs.push({ key, level: 'RUN', score: Math.round(dash * 0.8), month: '2026-10', at: now - 40 * 86400e3 });
-      db.runs.push({ key, level: 'SPLASH', score: 600 + ((i * 5 + 3) % 6) * 210, month: m, at: now - i * 5400e3 });
-      db.runs.push({ key, level: 'SPLASH', score: 500 + i * 90, month: '2026-10', at: now - 41 * 86400e3 });
-      db.runs.push({ key, level: 'WRUN', score: 900 + ((i * 3 + 1) % 5) * 520, month: m, at: now - i * 4000e3 });
-      db.runs.push({ key, level: 'WRUN', score: 700 + i * 150, month: '2026-10', at: now - 42 * 86400e3 });
-      for (let l = 1; l <= levels; l++) {
-        db.runs.push({ key, level: `L${l}`, score: 3600 + ((i * 7 + l * 13) % 10) * 120, month: m, at: now - (i * 5 + l) * 3600e3 });
-        db.runs.push({ key, level: `L${l}`, score: 3000 + l * 100, month: '2026-10', at: now - 40 * 86400e3 });
-      }
+      db.runs.push({ key, level: 'WRUN', score: 900 + ((i * 3 + 1) % 5) * 520 + dash % 7, month: m, at: now - i * 4000e3 });
+      db.runs.push({ key, level: 'WRUN', score: 700 + i * 150 + levels, month: '2026-10', at: now - 42 * 86400e3 });
     });
     LS.set(DEMO_KEY, db);
   }
@@ -127,6 +117,9 @@ const demo = {
     let key = Object.keys(db.players).find((k) => db.players[k].email === email);
     const returning = !!key;
     if (!key) {
+      const problem = nameProblem(p.name);
+      if (problem) throw new Error(problem);
+      if (Object.values(db.players).some((x) => nameKey(x.name) === nameKey(p.name))) throw new Error('That display name is already taken. Please choose another.');
       if (isPersonalDomain(emailDomain(email))) throw new Error(PERSONAL_MSG(emailDomain(email)));
       const cos = demoCompanies(db), chosen = p.companyId && cos.find((c) => c.id === p.companyId);
       const same = cos.find((c) => c.id === companyKey(p.company));
@@ -152,33 +145,46 @@ const demo = {
       domain_typo: domainTypo(d, cos.flatMap((c) => [...c.domains])),
     };
   },
-  async startRun(playerKey, level = 'RUN') { return { run_id: `demo-${level}-${Date.now()}` }; },
+  async checkName(name) {
+    const problem = nameProblem(name);
+    if (problem) return { ok: false, message: problem };
+    const taken = Object.values(demoDb().players).some((p) => nameKey(p.name) === nameKey(name));
+    return taken ? { ok: false, taken: true, message: "That display name is already taken. If it's yours, sign in with the same email." } : { ok: true };
+  },
+  async worlds() { return DEFAULT_WORLD_LIST; },
+  async fixName(key, name) {
+    const db = demoDb(), problem = nameProblem(name);
+    if (problem) throw new Error(problem);
+    db.players[key].name = name.trim(); LS.set(DEMO_KEY, db);
+    return { display_name: db.players[key].name };
+  },
+  async startRun() { return { run_id: `demo-WRUN-${Date.now()}` }; },
   async submitRun(r) {
-    const db = demoDb(), level = r.level || 'RUN';
+    const db = demoDb(), level = 'WRUN';
     db.runs.push({ key: r.playerKey, level, score: r.score, month: currentMonth(), at: Date.now() });
     LS.set(DEMO_KEY, db);
     return { accepted: true, ...(await demo.me(r.playerKey, GAME_OF(level))) };
   },
-  async leaderboard(period, limit = 50, game = 'dash') {
+  async leaderboard(period, limit = 50, game = 'wrun') {
     const db = demoDb(), m = currentMonth();
     return standings(period === 'month' ? db.runs.filter((r) => r.month === m) : db.runs, game).slice(0, limit).map((v, i) => ({
       rank: i + 1, display_name: db.players[v.key]?.name || '?', company: db.players[v.key]?.company || '', score: v.score, levels: v.levels, achieved_at: new Date(v.at).toISOString(),
     }));
   },
-  async companies(period, game = 'dash') {
+  async companies(period, game = 'wrun') {
     const rows = await demo.leaderboard(period, 1000, game), by = new Map();
     for (const r of rows) { const k = r.company.toLowerCase(), e = by.get(k) || { company: r.company, scores: [] }; e.scores.push(r.score); by.set(k, e); }
     return [...by.values()].map((e) => ({ company: e.company, players: e.scores.length, total: e.scores.sort((a, b) => b - a).slice(0, 3).reduce((a, b) => a + b, 0) }))
       .sort((a, b) => b.total - a.total).map((e, i) => ({ rank: i + 1, ...e }));
   },
-  async winners(game = 'dash') {
+  async winners(game = 'wrun') {
     const db = demoDb(), m = currentMonth(), out = [];
     for (const mo of [...new Set(db.runs.map((r) => r.month))].filter((x) => x < m).sort().reverse()) {
       standings(db.runs.filter((r) => r.month === mo), game).slice(0, 3).forEach((v, i) => out.push({ month: mo, rank: i + 1, display_name: db.players[v.key]?.name, company: db.players[v.key]?.company, score: v.score }));
     }
     return out;
   },
-  async me(key, game = 'dash') {
+  async me(key, game = 'wrun') {
     const db = demoDb(), p = db.players[key]; if (!p) return null;
     const m = currentMonth(), board = standings(db.runs.filter((r) => r.month === m), game), idx = board.findIndex((v) => v.key === key);
     const all = standings(db.runs.filter((r) => r.key === key), game)[0];

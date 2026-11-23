@@ -1,4 +1,4 @@
-# Drip Dash: admin guide
+# Drip Run: admin guide
 
 How to connect the shared leaderboard, run the monthly competition, and manage players and scores.
 
@@ -39,16 +39,10 @@ Months follow **US Central time**. The leaderboard rolls over automatically at m
 
 1. In Supabase, open **SQL Editor** and run (change the month):
    ```sql
-   -- Drip Dash (main game): best run per player
-   select * from admin.dash_standings where month = '2026-11' limit 20;
-   -- Bring Back the Flow: Valley Score (best score per level, added up) with a per-level breakdown
-   select * from admin.flow_standings where month = '2026-11' limit 20;
-   -- Drip Run (3D): best run per player (and their longest distance)
+   -- Drip Run: best run per player (and their longest distance)
    select * from admin.water_run_standings where month = '2026-11' limit 20;
-   -- Splash Escape: best run per player (and their longest survival time)
-   select * from admin.splash_standings where month = '2026-11' limit 20;
    ```
-   All four show name, company and **email** for the top players.
+   It shows name, company and **email** for the top players. (The retired games' views, `admin.dash_standings`, `admin.flow_standings` and `admin.splash_standings`, still show their old results.)
 2. Review the top 5. Things to look out for:
    - a huge score from someone with only 1–2 games
    - several accounts from the same company with near-identical scores
@@ -63,13 +57,50 @@ Months follow **US Central time**. The leaderboard rolls over automatically at m
    -- block a player completely (hidden from all boards, can't submit)
    update public.players set is_blocked = true where email_norm = 'someone@example.com';
    ```
-5. Each game's **Past Winners** tab fills itself from the top 3 verified scores of each closed month.
-6. Announce the winners in the newsletter (template in section 5).
+5. The **Past Winners** tab fills itself from the top 3 verified scores of each closed month.
+6. Check this month's world release (section 2a) and mention the new world in the newsletter.
+7. Announce the winners in the newsletter (template in section 5).
 
-### Fix an offensive display name
+## 2a. Worlds: monthly releases, locking and rotation
+
+Drip Run loops endlessly through the **live** worlds. Which worlds are live is decided by the database, so a release needs **no code deploy**. At launch 4 worlds are live and one more is scheduled for the 1st of each month (midnight Central):
+
 ```sql
-update public.players set display_name = 'Player 123' where email_norm = 'someone@example.com';
+select * from admin.worlds;   -- sort, id, name, status, state right now, release time (Central)
 ```
+
+| Status | Meaning |
+|---|---|
+| `live` | in the rotation now |
+| `scheduled` | goes live automatically at `release_at` (the game shows it as "coming" with its date until then) |
+| `locked` | temporarily out of the rotation (hidden) |
+| `retired` | gone for good (hidden, kept for the record) |
+
+Common commands (Supabase → SQL Editor):
+```sql
+select admin.set_world('aggie', 'live');                                          -- release now
+select admin.set_world('aggie', 'scheduled', '2026-12-15 09:00 America/Chicago');  -- move the release date
+select admin.set_world('epic', 'locked');                                          -- take a world out for a while
+select admin.set_world('epic', 'live');                                            -- bring it back
+select admin.set_world('chase', 'retired');                                        -- remove for good
+```
+The last live world can't be locked (the game always needs one). Players get the new list the next time they load the page.
+
+**A brand-new world** (a project that isn't in the game yet) needs one code change plus one row:
+1. Add the project to `site/js/run-projects.js` (verified gallery info and a photo in `site/assets/gallery/<id>.jpg`).
+2. Add its look, layout and atmosphere in `site/js/run-game.js` (`LOOK`, `LAYOUTS`, `ATMOS`, a `decor` entry and its ground texture), bump the `?v=` tag, test locally and push.
+3. Schedule it: `select admin.add_world('newid', 'Project Name', 9, 'scheduled', '2027-04-01 00:00 America/Chicago');`
+
+A world id in the database that this build has no scenery for is skipped by the game, so scheduling a world before its code ships is harmless.
+
+### Display names
+Names must be 3–24 characters, unique (ignoring case, accents, spaces and punctuation), use only letters, numbers, spaces and `. ' - _`, and avoid the blocked words in `private.blocked_names`. The form checks them as you type and the database enforces them.
+```sql
+select * from admin.names_to_fix;                                  -- names saved before the rules (e.g. 2 characters)
+select admin.rename_player('someone@example.com', 'New Name');     -- rename (same rules apply)
+insert into private.blocked_names (word, whole) values ('badword', false);   -- block a word (whole = true: only as a whole word)
+```
+Players listed in `admin.names_to_fix` are asked to choose a new name the next time they press Play.
 
 ---
 
@@ -79,7 +110,7 @@ update public.players set display_name = 'Player 123' where email_norm = 'someon
 |---|---|
 | Public leaderboard (month, all-time, companies, past winners) | `https://<your-site>/leaderboard.html` |
 | In-game leaderboard | **Leaderboard** button in the game, or `https://<your-site>/?view=leaderboard` |
-| Everything incl. emails (admins only) | Supabase → SQL Editor → `select * from admin.dash_standings;` (runner), `admin.water_run_standings` (Drip Run), `admin.flow_standings` (Flow) or `admin.splash_standings` (Splash Escape) |
+| Everything incl. emails (admins only) | Supabase → SQL Editor → `select * from admin.water_run_standings;` |
 | Raw tables | Supabase → Table Editor → `players`, `runs` |
 | Suspicious runs auto-rejected | `select * from admin.rejected_runs;` |
 
@@ -154,21 +185,13 @@ A live sync (a Supabase Edge Function or a Zapier/Make zap calling HubSpot's con
 
 The game is a static website (the `site/` folder, no build step). Whichever host you use, deploying means publishing the `site/` folder. See the README for the host that was set up.
 
-To change art, text or difficulty, edit the files in `site/` and redeploy:
-- Levels: each level is one file in `site/js/levels/` (timers, star thresholds, demand curves, dialogue, Field Note photo and caption).
+To change art, text or difficulty, edit the files in `site/` and push to `main` (Vercel redeploys in about a minute):
 - Text and copy: `site/index.html`.
-- Brand colors: `:root` at the top of `site/css/style.css` and `C` in `site/js/engine.js`.
+- Game rules and scenery: `site/js/run-game.js` (`RULES` at the top). If you change scoring or speed, update `submit_water_run` in `supabase/schema.sql` to match, or good scores could be rejected.
+- Brand colors: `:root` at the top of `site/css/style.css`.
+- After changing any Drip Run script, bump the `?v=` tag in `site/index.html` and in the imports at the top of `site/js/run-main.js` / `run-game.js`.
 
-If you change a level's scoring or timing, update its `maxScore` / `minSeconds` **and** the matching row in `private.levels` (top of `supabase/schema.sql`). Otherwise good scores could be rejected.
-
-### Adding a new level (monthly or seasonal challenge)
-1. Copy an existing level file in `site/js/levels/` (for example `l4-storm.js`), give it a new `id` (for example `S1`) and change the mechanics, text and photo.
-2. Add it to the list in `site/js/levels/index.js` and add a map position in `NODES` in `site/js/map.js`.
-3. Register its limits with the server (Supabase → SQL Editor):
-   ```sql
-   insert into private.levels (id, title, max_score, min_ms) values ('S1', 'Freeze Watch', 7000, 30000);
-   ```
-4. Push to `main`. Vercel redeploys in about a minute. The new level's best score automatically adds to every player's Valley Score.
+New worlds: see section 2a.
 
 ---
 
@@ -176,7 +199,7 @@ If you change a level's scoring or timing, update its `maxScore` / `minSeconds` 
 
 | Service | Plan | Cost | Relevant limits |
 |---|---|---|---|
-| Static hosting (GitHub Pages / Netlify / Cloudflare Pages) | Free | $0 | Far above expected newsletter traffic |
+| Vercel (Hobby) | Free | $0 | Far above expected newsletter traffic |
 | Supabase | Free | $0 | 500 MB database (millions of score rows), ample API calls. **A free project pauses after about 1 week with no activity.** The included GitHub Action pings it daily to prevent this. If it ever pauses, click "Restore" in the dashboard. |
 | Domain (optional, e.g. `play.incontrolwatersystems.com`) | Existing domain | $0 | Add a CNAME record at your DNS provider |
 

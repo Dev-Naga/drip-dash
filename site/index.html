@@ -3,72 +3,72 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-  <title>Drip Dash | inCon-trol Water Systems</title>
-  <meta name="description" content="Help Drip race through irrigation fields, pump stations and fountain plazas. Top the monthly inCon-trol Water Systems leaderboard.">
+  <title>Drip Run | Drip Dash by inCon-trol Water Systems</title>
+  <meta name="description" content="Drip Run: an endless 3D runner through real inCon-trol water-feature projects. New worlds every month. Top this month's leaderboard!">
   <meta name="theme-color" content="#005695">
-  <meta property="og:title" content="Drip Dash by inCon-trol Water Systems">
-  <meta property="og:description" content="Small drop. Big pressure. Can you top this month's leaderboard?">
+  <meta property="og:title" content="Drip Dash: Drip Run by inCon-trol Water Systems">
+  <meta property="og:description" content="Dash, jump and slide through real-world inCon-trol water features. Top this month's leaderboard!">
   <meta property="og:image" content="assets/og-card.jpg">
   <link rel="icon" href="assets/drip-mascot.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Zilla+Slab:ital,wght@0,700;1,700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/style.css?v=wr25">
+  <script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.min.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }</script>
 </head>
-<body class="game-page">
+<body class="game-page run-page">
   <main id="stage">
-    <canvas id="game" aria-label="Drip Dash game area. Tap, click or press Space to jump; swipe down or press Down to slide."></canvas>
+    <canvas id="game" aria-label="Drip Run. Left and right arrows or swipe to change lanes, up or swipe up to jump, down or swipe down to slide."></canvas>
 
-    <!-- in-game controls -->
+    <div id="run-hud" hidden>
+      <div class="rh-score"><b id="h-score">0</b><span id="h-dist">0 m</span></div>
+      <div class="rh-drops">💧 <b id="h-drops">0</b> <span id="h-mult" hidden>x2</span></div>
+      <div class="rh-powers" id="h-powers"></div>
+    </div>
+    <div id="journey" hidden aria-label="Journey progress"><div class="jr-track"><div class="jr-fill" id="jr-fill"></div></div><div class="jr-stops" id="jr-stops"></div><span class="jr-label" id="jr-label"></span></div>
+    <button id="proj-chip" hidden><span class="pc-i">ⓘ</span><span><small>inCon-trol project nearby: tap the sign or here</small><b id="pc-name"></b></span></button>
+    <div id="zone-banner" hidden><small>Now entering</small><b id="zb-name"></b><span id="zb-ref"></span></div>
+    <!-- water tank + this stop's supply mission -->
+    <div id="mission" hidden>
+      <div class="ms-tank"><span class="ms-ico">💧</span><div class="ms-bar"><div class="ms-fill" id="ms-fill"></div><div class="ms-cost"></div></div><b id="ms-pct">45%</b></div>
+      <div class="ms-goal"><span id="ms-text">Supply the splash pad</span><span class="ms-pips" id="ms-pips"></span></div>
+    </div>
+    <!-- compact stop card: shown for ~4 s when entering a project, tap × to dismiss -->
+    <aside id="stop-card" hidden aria-live="polite">
+      <button id="sc-close" aria-label="Dismiss">×</button>
+      <small id="sc-kicker"></small>
+      <b id="sc-name"></b>
+      <span id="sc-loc"></span>
+      <p id="sc-blurb"></p>
+      <p class="sc-mission" id="sc-mission"></p>
+      <i class="sc-timer"></i>
+    </aside>
+    <div id="countdown" hidden></div>
+    <div id="pop" hidden></div>
+
     <div id="hud-buttons" hidden>
       <button id="btn-pause" class="icon-btn" aria-label="Pause">❚❚</button>
       <button id="btn-mute" class="icon-btn" aria-label="Mute sound">🔊</button>
     </div>
-    <button id="btn-slide" class="slide-btn" aria-label="Slide" hidden>⬇<span>SLIDE</span></button>
-
     <div id="demo-badge" hidden title="Scores are saved only in this browser until the shared leaderboard is connected.">DEMO MODE · local scores only</div>
 
     <!-- TITLE -->
     <section id="screen-title" class="screen" aria-label="Title">
       <div class="card title-card">
         <a class="brand" href="https://www.incontrolwatersystems.com" target="_blank" rel="noopener"><img src="assets/logo-incontrol.png" alt="inCon-trol Water Systems" width="220"></a>
-        <canvas class="mascot" id="title-drip" width="220" height="276" aria-label="Drip, in your chosen outfit"></canvas>
-        <h1>Drip Dash</h1>
-        <p class="tagline">Small drop. Big pressure.</p>
+        <p class="kicker">Drip Dash</p>
+        <h1>Drip Run</h1>
+        <p class="tagline">How far can one drop go?</p>
+        <p class="story" id="story">The fountains on the Water Trail are running dry. Drip, the last drop out of Melissa Lake Park's tipping bucket, runs the Trail for as long as it can, waking every water feature on the way. <b>New worlds open every month.</b></p>
         <p class="month-banner" id="month-banner"></p>
         <button id="btn-play" class="btn primary big">Play</button>
         <div class="row">
           <button id="btn-board" class="btn">Leaderboard</button>
           <button id="btn-howto" class="btn">How to play</button>
         </div>
-        <button id="btn-outfits" class="btn outfit-btn">👕 Customize Drip</button>
+        <p class="zone-list" id="zone-list"></p>
+        <button id="btn-projects" class="btn link">📍 Worlds discovered: <span id="proj-count">0</span>/<span id="proj-total">4</span></button>
         <p id="player-chip" class="player-chip" hidden></p>
-        <a class="more-game featured" href="run/">
-          <span class="mg-new">NEW</span>
-          <span><b>Drip Run</b><small>3-lane runner through splash parks, plazas and city bridges inspired by real inCon-trol projects</small></span>
-          <span class="mg-go">▶</span>
-        </a>
-        <a class="more-game" href="flow/">
-          <span class="mg-new">NEW</span>
-          <span><b>Bring Back the Flow</b><small>A 7-level story adventure: restore Wellbrook's water systems</small></span>
-          <span class="mg-go">▶</span>
-        </a>
-        <a class="more-game" href="splash/">
-          <span class="mg-new">NEW</span>
-          <span><b>Splash Escape</b><small>Survive the Water World splash pad: dodge fountains, jets and drains</small></span>
-          <span class="mg-go">▶</span>
-        </a>
-        <p class="rotate-tip">📱↻ Tip: turn your phone sideways for a wider view.</p>
-      </div>
-    </section>
-
-    <!-- OUTFITS -->
-    <section id="screen-outfits" class="screen" hidden aria-label="Customize Drip">
-      <div class="card board-card">
-        <h2>👕 Customize Drip</h2>
-        <p class="muted small" id="outfit-note"></p>
-        <div class="outfits" id="outfit-grid"></div>
-        <button class="btn primary" data-back>Done</button>
       </div>
     </section>
 
@@ -77,25 +77,39 @@
       <div class="card">
         <h2>How to play</h2>
         <ul class="howto">
-          <li><b>Jump:</b> tap the screen, click, or press <kbd>Space</kbd>/<kbd>↑</kbd>. Tap again in the air to <b>double-jump</b>.</li>
-          <li><b>Hold</b> for a higher jump. Tall standpipes need it.</li>
-          <li><b>Slide:</b> swipe down, tap <b>SLIDE</b>, or press <kbd>↓</kbd> to get under low main lines.</li>
-          <li>Time the <b>geysers</b>: run past when they're off, or double-jump over the spray.</li>
-          <li>Grab <b>drops</b> (+10) in a row to build a combo up to <b>x5</b>. <b>Golden valves</b> are worth +150.</li>
-          <li>Power-ups: <b>Pressure Regulator</b> blocks one hit, <b>Smart Controller</b> pulls drops toward you, <b>Flow Meter</b> doubles points.</li>
-          <li>It gets faster the farther you go. Your best score each month counts.</li>
+          <li><b>Change lanes:</b> <kbd>←</kbd> <kbd>→</kbd> / <kbd>A</kbd> <kbd>D</kbd>, swipe left/right, or click the left/right side of the screen.</li>
+          <li><b>Jump:</b> <kbd>↑</kbd> / <kbd>W</kbd> / <kbd>Space</kbd>, swipe up, or tap/click the middle. Clears low pipes, weir walls and spraying drain grates.</li>
+          <li><b>Slide:</b> <kbd>↓</kbd> / <kbd>S</kbd> or swipe down. Gets you under water arches and beams.</li>
+          <li>Fountain basins and water walls fill the lane: <b>switch lanes</b>. Geysers flash red before they erupt.</li>
+          <li><b>Your mission: deliver water.</b> Drops fill Drip's water tank (it slowly evaporates). Each world has <b>3 glowing supply inlets</b>: run through one with at least 35% water to switch on the project's fountains ahead (+150). Supply all 3 to complete the world (+300). Skipped sections stay dry.</li>
+          <li>At Aggie Park and downtown, <b>people walk along the path</b>: change lanes to go around them.</li>
+          <li>Clip the side of something and Drip bounces back once. A second bump within 4 s ends the run.</li>
+          <li><b>Drops</b> +10, <b>golden valves</b> +100. Power-ups: <b>Pressure Regulator</b> (shield), <b>Smart Controller</b> (drop magnet), <b>Flow Meter</b> (x2 points), <b>Jet Boost</b> (super speed, smash through anything).</li>
+          <li><b>Endless run:</b> each world is a real inCon-trol project, 300 m long. After the last world the Trail loops back to the first: there's no finish line, so keep going for a high score. A new world opens on the 1st of each month.</li>
+          <li><b>Project signs:</b> tap or click the glowing sign (or the ⓘ button, or press <kbd>I</kbd>) to pause and read about the project. Play resumes with a 3-2-1 count when you close it.</li>
         </ul>
         <button class="btn primary" data-back>Got it</button>
       </div>
+    </section>
+
+    <!-- NEW NAME (names saved before the 3-character rule) -->
+    <section id="screen-rename" class="screen" hidden aria-label="Choose a new display name">
+      <form id="form-rename" class="card form" novalidate>
+        <h2>Choose a new display name</h2>
+        <p class="muted">Leaderboard names now need <b>3 to 24 characters</b> and must be unique. Your scores stay with you.</p>
+        <label>Display name <span class="muted">(shown publicly)</span><input name="name" autocomplete="nickname" required></label>
+        <p class="error" id="rename-error" role="alert"></p>
+        <button id="btn-rename" class="btn primary" type="submit">Save name</button>
+      </form>
     </section>
 
     <!-- REGISTER -->
     <section id="screen-register" class="screen" hidden aria-label="Register">
       <form id="form-register" class="card form" novalidate>
         <h2>Join the leaderboard</h2>
-        <p class="muted">Enter your work details so your scores count toward the monthly competition.</p>
+        <p class="muted">Sign up once and your scores count toward the monthly competition.</p>
         <label>Display name <small>(shown publicly)</small>
-          <input name="name" required minlength="2" maxlength="24" autocomplete="nickname" placeholder="e.g. Jane D.">
+          <input name="name" required minlength="3" maxlength="24" autocomplete="nickname" placeholder="e.g. Jane D.">
         </label>
         <label>Business email <small>(never shown)</small>
           <input name="email" type="email" required maxlength="120" autocomplete="email" placeholder="you@company.com">
@@ -119,19 +133,18 @@
         <p class="over-score" id="over-score">0</p>
         <p class="over-best" id="over-best"></p>
         <ul class="over-stats" id="over-stats"></ul>
+        <p class="over-journey" id="over-journey"></p>
+        <div class="zones-reached" id="over-zones"></div>
         <p class="over-rank" id="over-rank"></p>
         <button id="btn-save" class="btn primary" hidden>Save this score</button>
         <button id="btn-again" class="btn primary big">Play again</button>
-        <button id="btn-home" class="btn home" type="button" title="Back to the Drip Dash home screen"><svg class="nav-ic" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 11.5 12 4l9 7.5M5.5 9.5V20h5v-6h3v6h5V9.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Home</span></button>
+        <button id="btn-home" class="btn home" type="button"><svg class="nav-ic" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 11.5 12 4l9 7.5M5.5 9.5V20h5v-6h3v6h5V9.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Home</span></button>
         <div class="row">
           <button id="btn-board2" class="btn">Leaderboard</button>
           <button id="btn-share" class="btn">Challenge a colleague</button>
         </div>
         <div class="row">
-          <button id="btn-outfits2" class="btn link">👕 Change outfit</button>
-          <a class="btn link" href="run/">Try Drip Run →</a>
-          <a class="btn link" href="flow/">Try Bring Back the Flow →</a>
-          <a class="btn link" href="splash/">Try Splash Escape →</a>
+          <a class="btn link" href="https://incontrolwatersystems.com/gallery" target="_blank" rel="noopener">See the real projects ↗</a>
         </div>
       </div>
     </section>
@@ -139,7 +152,7 @@
     <!-- LEADERBOARD -->
     <section id="screen-board" class="screen" hidden aria-label="Leaderboard">
       <div class="card board-card">
-        <h2>🏆 Leaderboard</h2>
+        <h2>🏆 Drip Run Leaderboard</h2>
         <div id="board"></div>
         <div class="row">
           <button class="btn primary" data-back>Back</button>
@@ -149,16 +162,87 @@
     </section>
 
     <!-- PAUSE -->
-    <section id="screen-pause" class="screen" hidden aria-label="Paused">
+    <section id="screen-pause" class="screen pause-screen" hidden aria-label="Game paused" role="dialog" aria-modal="true">
+      <div class="card pause-card">
+        <div class="pz-hero">
+          <img id="pz-img" alt="" referrerpolicy="no-referrer">
+          <div class="pz-shade"></div>
+          <div class="pz-top"><img class="pz-logo" src="assets/logo-incontrol.png" alt="inCon-trol Water Systems"><span class="pz-badge">❚❚ Paused</span></div>
+          <div class="pz-title"><small id="pz-stop"></small><b id="pz-name"></b><span id="pz-loc"></span></div>
+        </div>
+        <div class="pz-body">
+          <div class="pz-col">
+            <p class="pz-blurb" id="pz-blurb"></p>
+            <ul class="pz-stats">
+              <li><b id="pz-score">0</b><span>score</span></li>
+              <li><b id="pz-dist">0 m</b><span>distance</span></li>
+              <li><b id="pz-tank">0%</b><span>water tank</span></li>
+              <li><b id="pz-del">0</b><span>deliveries</span></li>
+            </ul>
+            <div class="pz-mission"><span id="pz-mission"></span><span class="pz-pips" id="pz-pips"></span></div>
+            <div class="pz-journey"><div class="jr-track"><div class="jr-fill" id="pz-jfill"></div></div><small id="pz-jlabel"></small></div>
+          </div>
+          <div class="pz-col">
+            <h3>How to play</h3>
+            <div class="pz-ctrl" id="pz-keys">
+              <p><span class="k"><kbd>←</kbd><kbd>→</kbd> or <kbd>A</kbd><kbd>D</kbd></span><span>Change lanes</span></p>
+              <p><span class="k"><kbd>↑</kbd> <kbd>W</kbd> or <kbd>Space</kbd></span><span>Jump</span></p>
+              <p><span class="k"><kbd>↓</kbd> or <kbd>S</kbd></span><span>Slide</span></p>
+              <p><span class="k"><kbd>Esc</kbd> or <kbd>P</kbd></span><span>Pause / resume</span></p>
+              <p><span class="k"><kbd>I</kbd></span><span>Project info (near a sign)</span></p>
+            </div>
+            <div class="pz-ctrl" id="pz-touch">
+              <p><span class="k">👆 Swipe ← →</span><span>Change lanes</span></p>
+              <p><span class="k">👆 Swipe ↑ or tap middle</span><span>Jump</span></p>
+              <p><span class="k">👆 Swipe ↓</span><span>Slide</span></p>
+              <p><span class="k">❚❚ button</span><span>Pause</span></p>
+            </div>
+            <p class="pz-tip">💧 Collect drops to fill the tank, then run through the gold <b>supply inlets</b> to switch on each project's water.</p>
+          </div>
+        </div>
+        <div class="pz-actions">
+          <button id="btn-resume" class="btn primary big">▶ Resume</button>
+          <div class="row">
+            <button id="btn-restart" class="btn">↻ Restart</button>
+            <button id="btn-quit" class="btn">End run</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PROJECT INFO -->
+    <section id="screen-project" class="screen" hidden aria-label="Project information">
+      <div class="card project-card">
+        <p class="pj-kicker">inCon-trol project · <span id="pj-stop"></span></p>
+        <h2 id="pj-name"></h2>
+        <div class="pj-photo"><img id="pj-img" alt="" referrerpolicy="no-referrer"><span id="pj-noimg" hidden>Photo couldn't load right now. See it in the gallery.</span></div>
+        <dl class="pj-facts" id="pj-facts"></dl>
+        <p class="pj-src">Source: <a href="https://incontrolwatersystems.com/gallery" target="_blank" rel="noopener">inCon-trol project gallery</a>. Only details published there are shown.</p>
+        <button id="pj-close" class="btn primary big">Resume run</button>
+        <div class="row"><a class="btn link" href="https://incontrolwatersystems.com/gallery" target="_blank" rel="noopener">Open the gallery ↗</a></div>
+      </div>
+    </section>
+
+    <!-- PROJECTS DISCOVERED -->
+    <section id="screen-collection" class="screen" hidden aria-label="Projects discovered">
+      <div class="card board-card">
+        <h2>📍 The Water Trail</h2>
+        <p class="muted small">Tap a project sign during a run to add it here. Tap a project to read about it.</p>
+        <ol class="trail-list" id="trail-list"></ol>
+        <button class="btn primary" data-back>Back</button>
+      </div>
+    </section>
+
+    <!-- NO WEBGL -->
+    <section id="screen-nogl" class="screen" hidden aria-label="Not supported">
       <div class="card">
-        <h2>Paused</h2>
-        <button id="btn-resume" class="btn primary big">Resume</button>
-        <button id="btn-quit" class="btn link">End run</button>
+        <h2>Drip Run can't start on this device</h2>
+        <p>Drip Run needs WebGL, which this browser or device has turned off. Try the latest Chrome, Edge, Safari or Firefox, or turn on hardware acceleration in your browser settings.</p>
       </div>
     </section>
 
     <div id="toast" role="status" hidden></div>
   </main>
-  <script type="module" src="js/main.js"></script>
+  <script type="module" src="js/run-main.js?v=wr25"></script>
 </body>
 </html>

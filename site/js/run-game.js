@@ -1,12 +1,12 @@
-// Drip Run — 3D three-lane runner along "The Water Trail": eight real inCon-trol projects in a row.
-// Story: the Trail's fountains are running dry. Drip races from Melissa Lake Park's splash pad to
-// Commons at Agora to switch on the evening show, waking every water feature as it passes.
+// Drip Run — endless 3D three-lane runner along "The Water Trail". Each world is a real inCon-trol project; the run
+// loops through the worlds that are live this month (set in the database, see setWorlds / get_worlds) for as long as
+// Drip survives, waking every water feature as it passes.
 // The world scrolls toward the camera (+Z); Drip stays at z = 0 and switches lanes, jumps and slides.
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { sfx } from './audio.js?v=wr18';
-import { PROJECTS, photoSources } from './run-projects.js?v=wr18';
+import { sfx } from './audio.js?v=wr25';
+import { PROJECTS, photoSources } from './run-projects.js?v=wr25';
 
 // Scoring rules — the server checks scores against these (supabase/schema.sql → submit_water_run).
 export const RULES = { DROP: 10, VALVE: 100, POWERUP: 25, MULT: 2, START_SPEED: 13, MAX_SPEED: 30, BOOST: 1.5,
@@ -28,8 +28,7 @@ const SHADOWS = !MOBILE;
 const TAU = Math.PI * 2;
 
 // ---------------------------------------------------------------- the journey: one zone per project, sunrise → evening
-export const ZONE_LEN = 300;                      // metres per stop
-export const JOURNEY = ZONE_LEN * PROJECTS.length; // 2,400 m to the destination
+export const ZONE_LEN = 300;                      // metres per world on each lap
 const LOOK = {
   melissa: { time: 'Sunrise', top: 0x6fb2e6, bottom: 0xffdcb0, sun: 0xffd9a8, sunI: 2.4, hemi: 1.0, sunDir: [-0.6, 0.45, -0.7] },
   epic: { time: 'Morning', top: 0x4f9fe2, bottom: 0xd3eafa, sun: 0xfff1dc, sunI: 2.8, hemi: 1.05, sunDir: [-0.5, 0.7, -0.4] },
@@ -62,7 +61,20 @@ const ATMOS = {
   chase: { fx: 'motes', water: 0.7, back: 'city', hill: 0x8a7a68 },
   agora: { fx: 'fireflies', water: 0.8, back: 'nightcity', hill: 0x1b2438 },
 };
-export const ZONES = PROJECTS.map((p, i) => ({ ...p, idx: i, ...LOOK[p.id], ...ATMOS[p.id] }));
+// Worlds this build has scenery for. A world id from the database without scenery here is skipped.
+export const KNOWN_WORLDS = PROJECTS.map((p) => p.id).filter((id) => LOOK[id] && LAYOUTS[id] && ATMOS[id]);
+export const DEFAULT_WORLDS = ['melissa', 'epic', 'mckinney', 'olympus'];   // launch set; used if the server can't be reached
+// The worlds in this run's loop, in order. idx = the project's fixed number (keeps its scenery stable); pos = place in the loop.
+export const ZONES = [];
+export function setWorlds(ids) {
+  const use = (ids || []).filter((id, i, a) => KNOWN_WORLDS.includes(id) && a.indexOf(id) === i);
+  const list = use.length ? use : DEFAULT_WORLDS;
+  ZONES.length = 0;
+  list.forEach((id, pos) => { const idx = PROJECTS.findIndex((p) => p.id === id); ZONES.push({ ...PROJECTS[idx], idx, pos, ...LOOK[id], ...ATMOS[id] }); });
+  gateTex.clear();
+  return ZONES;
+}
+export const lapLength = () => ZONE_LEN * ZONES.length;
 export const zoneAt = (d) => ZONES[Math.floor(Math.max(0, d) / ZONE_LEN) % ZONES.length];
 
 const POWERS = {
@@ -290,7 +302,7 @@ function gateSign(zone) {
   const t = signTex(1024, 160, (g, w, h) => {
     g.fillStyle = zone.night ? '#0b1733' : '#005695'; g.fillRect(0, 0, w, h);
     g.fillStyle = '#00C1D5'; g.fillRect(0, h - 10, w, 10);
-    g.fillStyle = '#CFF6FF'; g.font = '700 34px "Barlow Condensed", sans-serif'; g.fillText(zone.idx === ZONES.length - 1 ? 'DESTINATION' : `STOP ${zone.idx + 1} OF ${ZONES.length}`, 30, 52);
+    g.fillStyle = '#CFF6FF'; g.font = '700 34px "Barlow Condensed", sans-serif'; g.fillText(`WORLD ${zone.pos + 1} OF ${ZONES.length}`, 30, 52);
     g.fillStyle = '#ffffff'; g.font = '700 64px "Zilla Slab", Georgia, serif'; g.fillText(zone.short, 30, 122, w - 60);
   });
   gateTex.set(zone.id, t); return t;
@@ -473,7 +485,7 @@ void main() {
     this.lane = 0; this.px = 0; this.py = 0; this.vy = 0; this.slideT = 0; this.fromLane = 0; this.stepPh = 0;
     this.shield = false; this.magnet = 0; this.mult = 0; this.boost = 0; this.stumble = 0; this.inv = 0;
     this.rowDist = 34; this.nextValve = 6; this.nextPower = 9; this.lastFree = 1;
-    this.zone = ZONES[0]; this.zonesSeen = [ZONES[0].id]; this.arrived = false; this.lap = 0;
+    this.zone = ZONES[0]; this.zonesSeen = [ZONES[0].id]; this.lap = 0;
     this.nearProject = null; this.intro = 0;
     this.water = RULES.TANK_START; this.deliveries = 0; this.stopsDone = 0; this.powered = new Set(); this.stopProgress = new Map();
     this.dead = false; this.deathT = 0;
@@ -1306,8 +1318,9 @@ void main() {
       this.zone = zone; if (!this.zonesSeen.includes(zone.id)) this.zonesSeen.push(zone.id);
       this.hooks.onZone?.(zone, false); sfx.zone();
     }
-    if (!this.arrived && this.dist >= JOURNEY - ZONE_LEN + SEG_LEN * 5) { this.arrived = true; sfx.win(); this.splash(this.px, 1.5, -3, 40); this.hooks.onArrive?.(); }
-    this.lap = Math.floor(this.dist / JOURNEY);
+    // endless: after the last live world the Trail loops back to the first, lap after lap
+    const lap = Math.floor(this.dist / lapLength());
+    if (lap > this.lap) { this.lap = lap; sfx.win(); this.splash(this.px, 1.5, -3, 40); this.hooks.onLap?.(lap); }
 
     const ph = this.slideT > 0 ? SLIDE_H : STAND_H;
     for (const o of this.objs) {
@@ -1380,8 +1393,7 @@ void main() {
     setTimeout(() => { this.state = 'over'; this.hooks.onGameOver?.(this.result(cause)); }, 900);
   }
   result(cause) {
-    const stop = this.arrived ? ZONES.length : Math.min(ZONES.length, Math.floor(this.dist / ZONE_LEN) + 1);
-    return { score: this.score, durationMs: Math.round(this.t * 1000), distance: Math.floor(this.dist), drops: this.drops, valves: this.valves, powerups: this.powerups, deliveries: this.deliveries, stopsDone: this.stopsDone, zones: [...this.zonesSeen], arrived: this.arrived, laps: this.lap, stop, cause };
+    return { score: this.score, durationMs: Math.round(this.t * 1000), distance: Math.floor(this.dist), drops: this.drops, valves: this.valves, powerups: this.powerups, deliveries: this.deliveries, stopsDone: this.stopsDone, zones: [...this.zonesSeen], laps: this.lap, world: this.zone, cause };
   }
 
   // ------------------------------------------------ visuals
@@ -1634,3 +1646,6 @@ void main() {
     cam.lookAt(cam.position.x, 0.9, -10);   // look straight ahead from wherever the camera is: pure translation
   }
 }
+
+// start with the launch worlds; run-main.js swaps in the live list from the server before the game is built
+setWorlds(DEFAULT_WORLDS);

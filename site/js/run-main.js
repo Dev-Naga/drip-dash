@@ -1,19 +1,23 @@
-// Drip Run — UI controller: screens, controls (keys / swipe / click), registration, run tickets, scores.
+// Drip Run — UI controller: screens, controls (keys / swipe / click), registration, run tickets, scores, worlds.
 // Drip Run scripts load with a ?v= tag (see run/index.html) so a deploy never mixes old and new files from the browser cache. Bump it on every change.
-import { api, store, currentMonth, monthLabel } from './api.js?v=wr18';
+import { api, store, currentMonth, monthLabel } from './api.js?v=wr25';
 import { LIVE } from './config.js';
-import { sfx, ambience } from './audio.js?v=wr18';
+import { sfx, ambience } from './audio.js?v=wr25';
 import { mountBoard } from './board.js';
 import { enhanceRegistration, linkDetails } from './company.js';
-import { PROJECTS, photoSources } from './run-projects.js?v=wr18';
+import { enhanceName, nameProblem } from './names.js';
+import { PROJECTS, photoSources } from './run-projects.js?v=wr25';
 
 const $ = (s) => document.querySelector(s);
-const screens = ['title', 'howto', 'register', 'over', 'board', 'pause', 'nogl', 'project', 'collection'];
+const screens = ['title', 'howto', 'register', 'rename', 'over', 'board', 'pause', 'nogl', 'project', 'collection'];
 const params = new URLSearchParams(location.search);
 
 let player = store.get('dripdash.player');       // shared sign-up across every Drip Dash game
 let skipped = false, run = null, pendingResult = null, lastScreen = 'title', afterRegister = null;
-let game = null, ZONES = [];
+let game = null, ZONES = [], COMING = [];
+const worldLabel = (z) => `World ${z.pos + 1} of ${ZONES.length}`;
+const lapLabel = (lap) => (lap > 0 ? `Lap ${lap + 1} · ` : '');
+const monthDay = (iso) => new Date(iso).toLocaleDateString('en-US', { month: 'long', day: 'numeric', timeZone: 'America/Chicago' });
 
 function show(name) {
   for (const s of screens) $(`#screen-${s}`).hidden = s !== name;
@@ -37,8 +41,8 @@ function pop(msg) {
 const cap = (t) => t.charAt(0).toUpperCase() + t.slice(1);
 // compact project card: name, verified location + one-line description, the stop's mission; ~4 s, dismissible
 function stopCard(zone, lap = 0) {
-  const c = $('#stop-card'), last = zone.idx === PROJECTS.length - 1;
-  $('#sc-kicker').textContent = `${lap ? 'Encore · ' : ''}${last ? 'Destination' : `Stop ${zone.idx + 1} of ${PROJECTS.length}`} · ${zone.time}`;
+  const c = $('#stop-card');
+  $('#sc-kicker').textContent = `${lapLabel(lap)}${worldLabel(zone)} · ${zone.time}`;
   $('#sc-name').textContent = zone.name;
   $('#sc-loc').textContent = zone.location ? `📍 ${zone.location}` : '📍 Location not published in the inCon-trol gallery';
   $('#sc-blurb').textContent = zone.blurb;
@@ -50,8 +54,7 @@ $('#sc-close').addEventListener('pointerdown', (e) => { e.stopPropagation(); e.p
 function flashTank(kind) { const t = $('#mission'); t.classList.remove('good', 'bad'); void t.offsetWidth; t.classList.add(kind); }
 function zoneBanner(zone, lap = 0) {
   const b = $('#zone-banner');
-  const last = zone.idx === PROJECTS.length - 1;
-  b.querySelector('small').textContent = `${lap ? 'Encore lap · ' : ''}${last ? 'Destination' : `Stop ${zone.idx + 1} of ${PROJECTS.length}`} · ${zone.time}`;
+  b.querySelector('small').textContent = `${lapLabel(lap)}${worldLabel(zone)} · ${zone.time}`;
   $('#zb-name').textContent = zone.name; $('#zb-ref').textContent = zone.story;
   b.hidden = false; b.classList.remove('go'); void b.offsetWidth; b.classList.add('go');
   clearTimeout(zoneBanner.h); zoneBanner.h = setTimeout(() => (b.hidden = true), 3200);
@@ -62,8 +65,13 @@ async function boot() {
   try {
     const test = document.createElement('canvas');
     if (!(test.getContext('webgl2') || test.getContext('webgl'))) throw new Error('no webgl');
-    const mod = await import('./run-game.js?v=wr18');
-    ZONES = mod.ZONES;
+    const mod = await import('./run-game.js?v=wr25');
+    // this month's worlds come from the server (private.worlds); the game skips ids it has no scenery for
+    let list = null;
+    try { list = await api.worlds(); } catch (e) { console.warn('Could not load the world schedule, using the launch worlds:', e.message); }
+    const liveIds = (list || []).filter((w) => w.state === 'live').map((w) => w.id);
+    ZONES = mod.setWorlds(liveIds);
+    COMING = (list || []).filter((w) => w.state === 'coming' && w.release_at && mod.KNOWN_WORLDS.includes(w.id) && !ZONES.some((z) => z.id === w.id));
     game = new mod.WaterRun($('#game'), {
       onGameOver: (r) => onGameOver(r),
       onZone: (z) => { stopCard(z, game.lap); },
@@ -71,15 +79,18 @@ async function boot() {
       onStopComplete: (z) => setTimeout(() => pop(`⛲ ${z.short} fully supplied! +300`), 900),
       onDry: () => { pop('Not enough water! Collect drops 💧 to fill the tank'); flashTank('bad'); },
       onMissed: () => {},
-      onArrive: () => { celebrate(); },
+      onLap: (lap) => { celebrate(lap); },
       onToast: (m) => toast(m),
       onPop: (m) => pop(m),
       onCountdown: (c) => { const el = $('#countdown'); el.hidden = c <= 0; el.textContent = c > 0 ? Math.ceil(c) : ''; },
     });
     game.setOutfit(store.get('dripdash.outfit', 'none'));
     window.__wrun = game;   // for testing in the console
-    $('#zone-list').innerHTML = `<b>8 stops, all real inCon-trol projects:</b><br>${ZONES.map((z) => z.short).join(' → ')}`;
-    $('#jr-stops').innerHTML = ZONES.map((z, i) => `<span style="left:${(i / ZONES.length) * 100}%" title="${z.name}">${i === ZONES.length - 1 ? '⛲' : ''}</span>`).join('') + '<span class="jr-drip" id="jr-drip">💧</span>';
+    const next = COMING[0];
+    $('#zone-list').innerHTML = `<b>${ZONES.length} worlds this month, all real inCon-trol projects:</b><br>${ZONES.map((z) => z.short).join(' → ')} ↻`
+      + (next ? `<br><span class="next-world">🔒 Next world: <b>${next.name}</b> opens ${monthDay(next.release_at)}</span>` : '');
+    $('#jr-stops').innerHTML = ZONES.map((z, i) => `<span style="left:${(i / ZONES.length) * 100}%" title="${z.name}"></span>`).join('') + '<span class="jr-drip" id="jr-drip">💧</span>';
+    renderCount();
     requestAnimationFrame(hud);
   } catch (e) {
     console.warn('Drip Run could not start 3D:', e);
@@ -109,11 +120,10 @@ function hud() {
     if (game.stumble > 0) chips.push('<span class="pw warn">⚠ Careful</span>');
     const html = chips.join('');
     if (hud.last !== html) { $('#h-powers').innerHTML = html; hud.last = html; }
-    // journey progress to Commons at Agora
+    // progress around this lap of the Trail (endless: it loops back to the first world)
     const J = ZONES.length * 300, d = game.dist % J, k = Math.min(1, d / J);
     $('#jr-fill').style.width = `${k * 100}%`; $('#jr-drip').style.left = `${k * 100}%`;
-    const left = Math.max(0, Math.ceil((J - d) / 10) * 10);
-    $('#jr-label').textContent = game.lap > 0 ? `Encore lap ${game.lap} · ${game.zone.short}` : game.arrived ? 'Commons at Agora: show is ON!' : `${game.zone.short} · ${left.toLocaleString()} m to Commons at Agora`;
+    $('#jr-label').textContent = `Lap ${game.lap + 1} · ${game.zone.short} · ${worldLabel(game.zone)}`;
     // water tank + this stop's supply progress
     const w = Math.round(game.water);
     $('#ms-fill').style.width = `${w}%`; $('#ms-pct').textContent = `${w}%`;
@@ -135,14 +145,42 @@ function startGame() {
   show(null);
   pendingResult = null;
   game.setOutfit(store.get('dripdash.outfit', 'none'));
-  const ticket = api.startRun(player?.player_key, 'WRUN').catch((e) => ({ error: e.message }));
+  const ticket = api.startRun(player?.player_key).catch((e) => ({ error: e.message }));
   run = { ticket };
   game.start((Date.now() ^ Math.floor(Math.random() * 1e9)) >>> 0);
 }
 function wantPlay() {
   if (!player && !skipped) { afterRegister = startGame; show('register'); prefill(); return; }
+  if (player && nameProblem(player.display_name)) { askNewName(startGame); return; }
   startGame();
 }
+
+// ---------------------------------------------------------------- new name for players whose saved name breaks today's rules
+const renameField = enhanceName($('#form-rename'), api);
+let afterRename = null;
+function askNewName(next) {
+  afterRename = next || null;
+  const f = $('#form-rename'); f.name.value = ''; $('#rename-error').textContent = '';
+  show('rename'); setTimeout(() => f.name.focus(), 50);
+}
+$('#form-rename').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const err = $('#rename-error'), name = e.target.name.value.trim();
+  err.textContent = '';
+  if (renameField.check()) { err.textContent = nameProblem(name); return; }
+  const btn = $('#btn-rename'); btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    const res = await api.fixName(player.player_key, name);
+    player = { ...player, display_name: res.display_name }; store.set('dripdash.player', player);
+    toast(`Saved. You're now ${player.display_name}!`);
+    renderTitle();
+    const next = afterRename; afterRename = null;
+    if (next) next(); else show('title');
+  } catch (ex) {
+    if (/already meets/.test(ex.message)) { const next = afterRename; afterRename = null; if (next) next(); else show('title'); return; }
+    err.textContent = ex.message || 'Could not save. Please try again.';
+  } finally { btn.disabled = false; btn.textContent = 'Save name'; }
+});
 
 // ---------------------------------------------------------------- title
 function renderTitle() {
@@ -157,7 +195,11 @@ function renderTitle() {
     const a = document.createElement('button'); a.className = 'btn link inline'; a.textContent = 'not you?';
     a.onclick = () => { store.del('dripdash.player'); player = null; renderTitle(); };
     chip.append(a);
-    api.me(player.player_key, 'wrun').then((me) => {
+    api.me(player.player_key).then((me) => {
+      if (me && me.display_name && me.display_name !== player.display_name) {   // renamed by an admin: show the current name
+        player = { ...player, display_name: me.display_name }; store.set('dripdash.player', player);
+        chip.firstChild.textContent = `Playing as ${player.display_name} · ${player.company} `;
+      }
       if (me && me.best_month) chip.firstChild.textContent = `Playing as ${player.display_name} · ${player.company} · Best this month: ${me.best_month.toLocaleString()}${me.month_rank ? ` (#${me.month_rank})` : ''} `;
     }).catch(() => {});
   } else chip.hidden = true;
@@ -165,6 +207,7 @@ function renderTitle() {
 
 // ---------------------------------------------------------------- registration (shared with the other games)
 const reg = enhanceRegistration($('#form-register'), api);   // business email + company detection (js/company.js)
+const nameField = enhanceName($('#form-register'), api);      // 3–24 characters, allowed characters, available (js/names.js)
 function prefill() { reg.prefill(); }
 $('#form-register').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -173,9 +216,9 @@ $('#form-register').addEventListener('submit', async (e) => {
   const data = {
     name: f.name.value.trim(), email: f.email.value.trim(), company: f.company.value.trim(),
     consent: f.consent.checked, optIn: f.optin.checked, hp: f.website.value,
-    source: params.get('utm_campaign') || params.get('src') || 'water-run',
+    source: params.get('utm_campaign') || params.get('src') || 'drip-run',
   };
-  if (data.name.length < 2) return (err.textContent = 'Please enter a display name (2–24 characters).');
+  if (nameField.check()) return (err.textContent = nameProblem(data.name));
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(data.email)) return (err.textContent = 'Please enter a valid email address.');
   if (!data.consent) return (err.textContent = 'Please accept the contest rules to join the leaderboard.');
   const btn = $('#btn-register'); btn.disabled = true; btn.textContent = 'Checking…';
@@ -213,13 +256,12 @@ async function onGameOver(r) {
   $('#over-stats').innerHTML = `
     <li><b>${r.distance.toLocaleString()} m</b><span>distance</span></li>
     <li><b>${r.deliveries}</b><span>water deliveries</span></li>
-    <li><b>${r.stopsDone}</b><span>stops fully supplied</span></li>
+    <li><b>${r.stopsDone}</b><span>worlds fully supplied</span></li>
     <li><b>${r.drops}</b><span>drops</span></li>`;
-  $('#over-journey').innerHTML = r.arrived
-    ? `⛲ <b>You reached Commons at Agora</b> and switched on the evening show!${r.laps ? ` Plus ${r.laps} encore lap${r.laps > 1 ? 's' : ''}.` : ''}`
-    : `You made it to <b>stop ${r.stop} of 8: ${ZONES[r.stop - 1].short}</b>. ${Math.max(0, 2400 - r.distance).toLocaleString()} m short of Commons at Agora.`;
-  if (r.arrived) store.set('wrun.arrived', (store.get('wrun.arrived', 0) || 0) + 1);
-  $('#over-zones').innerHTML = `<small>Stops reached · tap one to read about the project</small>${ZONES.map((z) => `<button class="${r.zones.includes(z.id) ? 'on' : ''}" data-proj="${z.id}">${r.zones.includes(z.id) ? '✔' : '○'} ${z.short}</button>`).join('')}`;
+  $('#over-journey').innerHTML = r.laps
+    ? `🔁 <b>${r.laps} full lap${r.laps > 1 ? 's' : ''} of the Trail</b>, ending at ${r.world.short}. Keep going next time!`
+    : `You made it to <b>${r.world.short}</b> (${worldLabel(r.world)}).`;
+  $('#over-zones').innerHTML = `<small>Worlds reached · tap one to read about the project</small>${ZONES.map((z) => `<button class="${r.zones.includes(z.id) ? 'on' : ''}" data-proj="${z.id}">${r.zones.includes(z.id) ? '✔' : '○'} ${z.short}</button>`).join('')}`;
   $('#over-zones').querySelectorAll('[data-proj]').forEach((b) => (b.onclick = () => openProject(b.dataset.proj, false)));
   $('#over-rank').textContent = '';
   $('#btn-save').hidden = true;
@@ -234,18 +276,30 @@ async function onGameOver(r) {
 }
 async function submit(r) {
   const rank = $('#over-rank');
-  rank.textContent = 'Saving score…';
+  if (r.submitted) return;                       // one submission per run (the server also refuses a second one)
+  r.submitted = true;
+  rank.textContent = 'Saving score…'; rank.dataset.kind = 'busy';
   try {
     const ticket = await run.ticket;
     if (ticket?.error) throw new Error(ticket.error);
     const res = await api.submitRun({ level: 'WRUN', runId: ticket.run_id, playerKey: player.player_key, score: r.score, durationMs: r.durationMs, distance: r.distance, drops: r.drops, valves: r.valves, powerups: r.powerups, deliveries: r.deliveries, stopsDone: r.stopsDone });
-    if (res && res.accepted === false) { rank.textContent = `Score not counted: ${res.reason || 'failed verification'}.`; return; }
+    if (res && res.accepted === false) { rank.textContent = `Score not counted: ${res.reason || 'failed verification'}.`; rank.dataset.kind = 'bad'; return; }
     const bits = [];
-    if (res?.month_rank) bits.push(`You're #${res.month_rank} of ${res.month_players} this month`);
+    if (res?.month_rank) bits.push(`✔ Saved. You're #${res.month_rank} of ${res.month_players} this month`);
     if (res?.best_month) bits.push(`monthly best ${Number(res.best_month).toLocaleString()}`);
-    rank.textContent = bits.length ? `${bits.join(' · ')}.` : 'Score saved.';
+    rank.textContent = bits.length ? `${bits.join(' · ')}.` : '✔ Score saved.'; rank.dataset.kind = 'ok';
   } catch (e) {
-    rank.textContent = `Couldn't save your score (${e.message}). Check your connection and try again.`;
+    if (/Unknown player/.test(e.message)) {          // this browser's sign-in no longer exists: sign up again to save it
+      store.del('dripdash.player'); player = null; renderTitle();
+      pendingResult = r; r.submitted = false; $('#btn-save').hidden = false;
+      rank.textContent = 'Please sign in again to save this score.'; rank.dataset.kind = 'bad'; return;
+    }
+    rank.textContent = `Couldn't save your score (${e.message}).`; rank.dataset.kind = 'bad';
+    if (!/already submitted|ticket/i.test(e.message)) {   // a network problem: let the player retry this same run
+      r.submitted = false;
+      const retry = document.createElement('button'); retry.className = 'btn link inline'; retry.textContent = 'Try again';
+      retry.onclick = () => submit(r); rank.append(' ', retry);
+    }
   }
 }
 $('#btn-save').onclick = () => {
@@ -269,8 +323,8 @@ function openProject(id, fromRun) {
   projectFromRun = !!fromRun;
   if (fromRun && game) game.pause();
   const found = new Set(store.get('wrun.projects', [])); found.add(id); store.set('wrun.projects', [...found]); renderCount();
-  const i = PROJECTS.indexOf(p);
-  $('#pj-stop').textContent = i === PROJECTS.length - 1 ? 'Destination' : `Stop ${i + 1} of ${PROJECTS.length}`;
+  const z = ZONES.find((x) => x.id === id);
+  $('#pj-stop').textContent = z ? worldLabel(z) : 'Coming soon';
   $('#pj-name').textContent = p.name;
   const img = $('#pj-img'), srcs = photoSources(p, 1200); let k = 0;
   $('#pj-noimg').hidden = true; img.hidden = false; img.alt = `${p.name} (inCon-trol gallery photo)`;
@@ -291,20 +345,26 @@ $('#pj-close').onclick = () => {
   if (projectFromRun && game && game.state === 'paused') { show(null); game.resume(1.5); }
   else show(lastScreen);
 };
-function renderCount() { $('#proj-count').textContent = new Set(store.get('wrun.projects', [])).size; }
+function renderCount() {
+  const found = new Set(store.get('wrun.projects', []));
+  $('#proj-count').textContent = ZONES.filter((z) => found.has(z.id)).length;
+  $('#proj-total').textContent = ZONES.length || 4;
+}
 function openCollection() {
   const found = new Set(store.get('wrun.projects', []));
-  $('#trail-list').innerHTML = PROJECTS.map((p, i) => `<li class="${found.has(p.id) ? 'got' : ''}"><button data-proj="${p.id}"><span class="tl-n">${i === PROJECTS.length - 1 ? '⛲' : i + 1}</span><span><b>${p.name}</b><small>${found.has(p.id) ? 'Discovered' : 'Not discovered yet (tap to preview)'}</small></span></button></li>`).join('');
+  const live = ZONES.map((z) => `<li class="${found.has(z.id) ? 'got' : ''}"><button data-proj="${z.id}"><span class="tl-n">${z.pos + 1}</span><span><b>${z.name}</b><small>${found.has(z.id) ? 'Discovered' : 'Not discovered yet (tap to preview)'}</small></span></button></li>`);
+  const soon = COMING.map((w) => `<li class="locked"><div class="tl-lock"><span class="tl-n" aria-hidden="true">🔒</span><span><b>${w.name}</b><small>New world · opens ${monthDay(w.release_at)}</small></span></div></li>`);
+  $('#trail-list').innerHTML = live.concat(soon).join('');
   $('#trail-list').querySelectorAll('[data-proj]').forEach((b) => (b.onclick = () => openProject(b.dataset.proj, false)));
   show('collection');
 }
 $('#btn-projects').onclick = openCollection;
 $('#proj-chip').onclick = (e) => { e.stopPropagation(); if (game?.nearProject && game.state === 'playing') openProject(game.nearProject.id, true); };
-function celebrate() {
+function celebrate(lap) {
   const b = $('#zone-banner');
-  b.querySelector('small').textContent = 'You made it!';
-  $('#zb-name').textContent = 'The show is ON ⛲';
-  $('#zb-ref').textContent = 'Commons at Agora is lit up. Keep running: every metre still scores!';
+  b.querySelector('small').textContent = `Lap ${lap} complete!`;
+  $('#zb-name').textContent = `Lap ${lap + 1} 🔁`;
+  $('#zb-ref').textContent = 'Back to the start of the Trail. Every metre still scores!';
   b.hidden = false; b.classList.remove('go'); void b.offsetWidth; b.classList.add('go');
   clearTimeout(zoneBanner.h); zoneBanner.h = setTimeout(() => (b.hidden = true), 3600);
 }
@@ -320,6 +380,7 @@ function openBoard() {
 // ---------------------------------------------------------------- wiring
 $('#btn-play').onclick = wantPlay;
 $('#btn-again').onclick = wantPlay;
+$('#btn-home').onclick = () => { show('title'); renderTitle(); $('#btn-play').focus(); };   // results -> home (title) screen
 $('#btn-board').onclick = openBoard;
 $('#btn-board2').onclick = openBoard;
 $('#btn-howto').onclick = () => show('howto');
@@ -327,8 +388,8 @@ document.querySelectorAll('[data-back]').forEach((b) => (b.onclick = () => show(
 // ---------------------------------------------------------------- branded pause screen
 // The game freezes completely while paused (run-game.js skips the clock, physics, animation and timers).
 function fillPause() {
-  const z = game.zone, i = z.idx, last = i === PROJECTS.length - 1;
-  $('#pz-stop').textContent = `${game.lap ? 'Encore · ' : ''}${last ? 'Destination' : `Stop ${i + 1} of ${PROJECTS.length}`} · ${z.time}`;
+  const z = game.zone;
+  $('#pz-stop').textContent = `${lapLabel(game.lap)}${worldLabel(z)} · ${z.time}`;
   $('#pz-name').textContent = z.name;
   $('#pz-loc').textContent = z.location ? `📍 ${z.location}` : '📍 Location not published in the inCon-trol gallery';
   $('#pz-blurb').textContent = z.blurb;
@@ -343,9 +404,9 @@ function fillPause() {
   const done = game.stopProgress.get(Math.floor(game.dist / 300)) || 0;
   $('#pz-mission').textContent = done >= 3 ? `${cap(z.supply)}: fully supplied ✔` : `Mission: supply ${z.supply} (${done}/3)`;
   $('#pz-pips').innerHTML = [0, 1, 2].map((n) => `<i class="${n < done ? 'on' : ''}"></i>`).join('');
-  const J = PROJECTS.length * 300, d = game.dist % J;
+  const J = ZONES.length * 300, d = game.dist % J;
   $('#pz-jfill').style.width = `${Math.min(100, (d / J) * 100)}%`;
-  $('#pz-jlabel').textContent = game.arrived && !game.lap ? 'Commons at Agora reached: the show is on!' : `${Math.max(0, Math.ceil((J - d) / 10) * 10).toLocaleString()} m to Commons at Agora · ${game.stopsDone} stop${game.stopsDone === 1 ? '' : 's'} fully supplied`;
+  $('#pz-jlabel').textContent = `Lap ${game.lap + 1} · ${Math.max(0, Math.ceil((J - d) / 10) * 10).toLocaleString()} m to the next lap · ${game.stopsDone} world${game.stopsDone === 1 ? '' : 's'} fully supplied`;
 }
 const doPause = () => {
   if (!game || !(game.state === 'playing' || game.state === 'countdown')) return;

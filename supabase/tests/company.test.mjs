@@ -23,7 +23,10 @@ const anon = () => db.exec('set role anon');
 const admin = () => db.exec('reset role');
 
 await db.exec('create role anon nologin; create role authenticated nologin;');
-await db.exec(sql);
+// These tests are about companies and reuse display names freely; name rules have their own tests (schema.test.mjs).
+const relaxNames = () => db.exec(`drop index if exists players_name_key_uidx;
+  create or replace function private.name_taken(p text, p_except uuid) returns boolean language sql as $$ select false $$;`);
+await db.exec(sql); await relaxNames();
 await db.exec(`set request.headers = '{"x-forwarded-for":"5.6.7.8"}'`);
 
 // ================================================================ 1. browser and database agree
@@ -114,7 +117,7 @@ for (const [name, why] of [['Acme Landscapes', 'similar spelling'], ['Apex Lands
 }
 l = (await one(`select lookup_company('pat@cityofplano.org', 'City of Plano Parks') r`)).r;
 ok(!l.match && !l.needs_confirmation && l.suggestions.length === 0, 'unrelated company → no suggestions, no question');
-const apex = (await one(`select register_player('al@apexlandscaping.com','Al','Apex Landscaping',true) r`)).r;
+const apex = (await one(`select register_player('al@apexlandscaping.com','Alan','Apex Landscaping',true) r`)).r;
 const iws2 = (await one(`select register_player('z@iwsparts.com','Zed','IWS',true) r`)).r;
 ok(apex.company_id !== jane.company_id && iws2.company_id !== iws.company_id, 'similar companies registered without choosing stay separate');
 await admin();
@@ -160,16 +163,16 @@ await expectErr(() => q(`select lookup_company($1, null)`, ['x'.repeat(130) + '@
 
 // ================================================================ 8. leaderboards use one name per company
 async function play(key, score) {
-  const t = (await one(`select start_run($1, 'RUN') r`, [key])).r;
-  await admin(); await q(`update runs set started_at = now() - interval '61 seconds' where id = $1`, [t.run_id]); await anon();
-  return (await one(`select submit_run($1,$2,$3,60000,$3,0,0) r`, [t.run_id, key, score])).r;
+  const t = (await one(`select start_run($1, 'WRUN') r`, [key])).r;
+  await admin(); await q(`update runs set started_at = now() - interval '81 seconds' where id = $1`, [t.run_id]); await anon();
+  return (await one(`select submit_water_run($1,$2,$3,80000,$3,0,0,0) r`, [t.run_id, key, score])).r;
 }
 await play(jane.player_key, 3000); await play(bob.player_key, 2000);
 const ty = (await one(`select register_player('ty@acmelandscaping.org','Pat','Acme',true) r`)).r;
 await play(ty.player_key, 1000); await play(apex.player_key, 2500);
-let lb = await q(`select * from get_leaderboard('month', null, 10, 'dash')`);
+let lb = await q(`select * from get_leaderboard('month', null, 10, 'wrun')`);
 ok(lb.filter((r) => r.company === 'Acme Landscaping, LLC').length === 3, 'player board shows the one company name for all spellings');
-let cb = await q(`select * from get_company_board('month', 10, 'dash')`);
+let cb = await q(`select * from get_company_board('month', 10, 'wrun')`);
 ok(cb.length === 2 && cb[0].company === 'Acme Landscaping, LLC' && Number(cb[0].total) === 6000 && Number(cb[0].players) === 3,
   'company board: Acme spellings combined, Apex separate ' + JSON.stringify(cb.map((c) => [c.company, Number(c.total)])));
 
@@ -183,9 +186,9 @@ await admin();
 const m = (await one(`select admin.merge_companies($1, $2, 'same firm, checked by phone') r`, [apex.company_id, jane.company_id])).r;
 ok(m.players_moved === 2 && /undo_merge/.test(m.undo), `merge moves players (${m.players_moved}) and returns an undo statement`);
 await anon();
-cb = await q(`select * from get_company_board('month', 10, 'dash')`);
+cb = await q(`select * from get_company_board('month', 10, 'wrun')`);
 ok(cb.length === 1 && Number(cb[0].total) === 7500, 'after merge: one company, top-3 total 3000+2500+2000');
-const late = (await one(`select register_player('vi@apex-new.com','Vi','Apex Landscaping Inc',true) r`)).r;
+const late = (await one(`select register_player('vi@apex-new.com','Vivian','Apex Landscaping Inc',true) r`)).r;
 ok(late.company_id === jane.company_id, 'after merge: the old spelling joins the merged company');
 await admin();
 ok((await one(`select status from company_review where least(company_a,company_b) = least($1::uuid,$2::uuid) and greatest(company_a,company_b) = greatest($1::uuid,$2::uuid)`, [apex.company_id, jane.company_id])).status === 'merged', 'review row marked merged');
@@ -201,7 +204,7 @@ ok(!(await q(`select 1 from admin.company_review_queue where review_id = $1`, [r
 ok((await one(`select admin.scan_duplicates() n`)).n === 0, 'full re-scan does not re-queue dismissed or existing pairs');
 await q(`select admin.rename_company($1, 'Thames Fountains Ltd (UK)')`, [uk1.company_id]);
 await anon();
-const uk3 = (await one(`select register_player('cy@other.co.uk','Cy','Thames Fountains',true) r`)).r;
+const uk3 = (await one(`select register_player('cy@other.co.uk','Cyrus','Thames Fountains',true) r`)).r;
 ok(uk3.company_id === uk1.company_id && uk3.company === 'Thames Fountains Ltd (UK)', 'rename: shown name changes, old spelling still matches');
 await admin();
 const dir = await q(`select * from admin.company_directory where name like 'Acme%'`);
@@ -213,6 +216,7 @@ await q(`insert into players (email, display_name, company) values
   ('r4@riverbend.com','R4','Riverbend Aquatics')`);
 const before = await q(`select email, company from players order by email`);
 await db.exec(sql);                                   // re-deploying the schema runs the backfill
+await relaxNames();
 ok(true, 'schema re-applied (idempotent) with the backfill');
 const bf = await q(`select p.email, p.company typed, c.name, p.company_id from players p join companies c on c.id = p.company_id where p.email like 'r_@%' order by p.email`);
 ok(bf.length === 4, 'every existing player now has a company');

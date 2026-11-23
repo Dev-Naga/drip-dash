@@ -67,7 +67,8 @@ create index if not exists runs_board_idx  on public.runs (month, status, player
 create index if not exists runs_player_idx on public.runs (player_id, status);
 create index if not exists runs_ip_idx     on public.runs (ip_hash, started_at);
 
--- Per-level limits (keep in sync with maxScore / minSeconds in site/js/levels/*.js)
+-- Per-level limits. Drip Run ('WRUN') is the only game on the site: every other level is inactive, so start_run
+-- refuses it. The rows stay so past runs of the retired games keep their titles.
 create table if not exists private.levels (
   id         text primary key,
   title      text not null,
@@ -75,18 +76,19 @@ create table if not exists private.levels (
   min_ms     integer not null,
   active     boolean not null default true
 );
-insert into private.levels (id, title, max_score, min_ms) values
-  ('RUN', 'Drip Dash (runner)', 1000000, 1000),   -- runner runs are checked by submit_run
-  ('SPLASH', 'Splash Escape', 1000000, 3000),      -- splash runs are checked by submit_splash
-  ('WRUN', 'Water Run', 1000000, 1000),            -- Water Run runs are checked by submit_water_run
-  ('L1', 'Wake the Water',      7000, 15000),
-  ('L2', 'The Pressure Dance',  6500, 55000),
-  ('L3', 'Before Sunrise',      7500, 20000),
-  ('L4', 'Catch the Storm',     7500, 45000),
-  ('L5', 'Lift to the Sky',     7500, 40000),
-  ('L6', 'The Grand Show',      7000, 25000),
-  ('L7', 'Evening Rush',        7000, 85000)
-on conflict (id) do update set title = excluded.title, max_score = excluded.max_score, min_ms = excluded.min_ms;
+insert into private.levels (id, title, max_score, min_ms, active) values
+  ('WRUN', 'Drip Run', 1000000, 1000, true),          -- the site's only game, checked by submit_water_run
+  ('RUN', 'Drip Dash (runner, retired)', 1000000, 1000, false),
+  ('SPLASH', 'Splash Escape (retired)', 1000000, 3000, false),
+  ('L1', 'Wake the Water (retired)',      7000, 15000, false),
+  ('L2', 'The Pressure Dance (retired)',  6500, 55000, false),
+  ('L3', 'Before Sunrise (retired)',      7500, 20000, false),
+  ('L4', 'Catch the Storm (retired)',     7500, 45000, false),
+  ('L5', 'Lift to the Sky (retired)',     7500, 40000, false),
+  ('L6', 'The Grand Show (retired)',      7000, 25000, false),
+  ('L7', 'Evening Rush (retired)',        7000, 85000, false)
+on conflict (id) do update set title = excluded.title, max_score = excluded.max_score, min_ms = excluded.min_ms, active = excluded.active;
+create index if not exists runs_wrun_board_idx on public.runs (level, month, score desc) where status = 'accepted';
 
 alter table public.players enable row level security;
 alter table public.runs    enable row level security;
@@ -128,16 +130,17 @@ language sql stable as $$
   order by r.player_id, r.score desc, r.submitted_at asc
 $$;
 
+-- The only public game is Drip Run ('wrun'). Asking for any other game is an error, not an empty board.
+create or replace function private.checked_game(p_game text) returns text
+language plpgsql immutable set search_path = pg_catalog as $$
+begin
+  if coalesce(p_game, 'wrun') <> 'wrun' then raise exception 'Only Drip Run is available.'; end if;
+  return 'wrun';
+end $$;
 create or replace function private.standings(p_game text, p_month text)
 returns table (player_id uuid, score bigint, levels bigint, last_at timestamptz)
 language sql stable as $$
-  select * from private.best_run('RUN', p_month) where coalesce(p_game, 'dash') not in ('flow', 'splash', 'wrun')
-  union all
-  select * from private.best_run('SPLASH', p_month) where p_game = 'splash'
-  union all
-  select * from private.best_run('WRUN', p_month) where p_game = 'wrun'
-  union all
-  select * from private.valley(p_month) where p_game = 'flow'
+  select * from private.best_run('WRUN', p_month) where private.checked_game(p_game) = 'wrun'
 $$;
 drop function if exists private.dash(text);
 
@@ -543,6 +546,208 @@ begin
   );
 end $$;
 
+-- --------------------------------------------------------------- display names: rules, uniqueness, blocked words
+-- Rules (mirrored for instant feedback in site/js/names.js; the server always decides):
+--   3–24 characters after trimming; letters (accents allowed), numbers, spaces and . ' ’ - _ only;
+--   at least one letter; no doubled spaces/punctuation; nothing offensive or reserved;
+--   unique, ignoring case, accents, spaces and punctuation ("Naga D" = "naga-d" = "NAGAD").
+create or replace function private.name_key(p text) returns text
+language sql immutable set search_path = pg_catalog as $$
+  select regexp_replace(translate(lower(coalesce(p, '')), 'àáâãäåāçćčèéêëēěìíîïīñńòóôõöøōùúûüūýÿžš', 'aaaaaaaccceeeeeeiiiiinnooooooouuuuuyyzs'), '[^a-z0-9]', '', 'g')
+$$;
+
+-- Words a display name may not contain. whole = true: only as a whole word ("ass" blocks "Big Ass" but not "Cassie").
+-- Extend with: insert into private.blocked_names (word, whole) values ('example', true);
+create table if not exists private.blocked_names (
+  word  text primary key check (word ~ '^[a-z0-9]+$'),
+  whole boolean not null default false
+);
+insert into private.blocked_names (word, whole) values
+  ('fuck', false), ('shit', false), ('bitch', false), ('cunt', true), ('cunts', true), ('whore', false), ('slut', false),
+  ('nigger', false), ('nigga', false), ('faggot', false), ('pussy', false), ('asshole', false),
+  ('bastard', false), ('motherf', false), ('dildo', false), ('porn', false), ('penis', false), ('vagina', false),
+  ('hitler', false), ('kkk', false), ('twat', false),
+  ('ass', true), ('dick', true), ('cock', true), ('fag', true), ('sex', true), ('anal', true), ('cum', true),
+  ('tits', true), ('boobs', true), ('rape', true), ('rapist', true), ('piss', true), ('nazi', true), ('wank', true),
+  ('retard', true), ('retarded', true),
+  -- reserved: could be mistaken for staff or the company
+  ('admin', true), ('administrator', true), ('moderator', true), ('mod', true), ('staff', true), ('official', true),
+  ('null', true), ('undefined', true), ('incontrol', true), ('incontrolwatersystems', true), ('dripdash', true), ('driprun', true)
+on conflict (word) do update set whole = excluded.whole;
+
+-- null when the name is fine, otherwise the message to show the player
+create or replace function private.name_problem(p text) returns text
+language plpgsql stable set search_path = pg_catalog, private as $$
+declare
+  n text := btrim(regexp_replace(coalesce(p, ''), '\s+', ' ', 'g'));
+  k text; leet text; toks text[]; ltoks text[];
+begin
+  if char_length(n) < 3 or char_length(n) > 24 then return 'Display name must be 3–24 characters.'; end if;
+  if n !~ '^[A-Za-z0-9À-ÖØ-öø-ÿ .''’_-]+$' then return 'Display names can only use letters, numbers, spaces and . '' - _'; end if;
+  if n !~ '[A-Za-zÀ-ÖØ-öø-ÿ]' then return 'Display names need at least one letter.'; end if;
+  if n ~ '[.''’_-]{2,}' then return 'Please don''t put two punctuation marks in a row.'; end if;
+  k := private.name_key(n);
+  if char_length(k) < 3 then return 'Display name must have at least 3 letters or numbers.'; end if;
+  leet := translate(k, '0134578', 'oieastb');
+  toks := regexp_split_to_array(translate(lower(n), 'àáâãäåāçćčèéêëēěìíîïīñńòóôõöøōùúûüūýÿžš', 'aaaaaaaccceeeeeeiiiiinnooooooouuuuuyyzs'), '[^a-z0-9]+');
+  ltoks := array(select translate(t, '0134578', 'oieastb') from unnest(toks) t);
+  if exists (select 1 from private.blocked_names b
+             where (not b.whole and (strpos(k, b.word) > 0 or strpos(leet, b.word) > 0))
+                or (b.whole and (b.word = any(toks) or b.word = any(ltoks) or b.word = k or b.word = leet))) then
+    return 'Please choose a different display name.';
+  end if;
+  return null;
+end $$;
+
+create or replace function private.name_taken(p text, p_except uuid) returns boolean
+language sql stable set search_path = pg_catalog, public, private as $$
+  select exists (select 1 from public.players where private.name_key(display_name) = private.name_key(p) and id is distinct from p_except)
+$$;
+
+-- one player per name (same key). If older duplicate names exist the index waits until they are fixed
+-- (admin.duplicate_names lists them); sign-up still refuses taken names through private.name_taken either way.
+do $$ begin
+  if to_regclass('public.players_name_key_uidx') is null then
+    if exists (select 1 from public.players group by private.name_key(display_name) having count(*) > 1) then
+      raise notice 'Duplicate display names exist: unique name index not created yet. See admin.duplicate_names.';
+    else
+      create unique index players_name_key_uidx on public.players (private.name_key(display_name));
+    end if;
+  end if;
+end $$;
+drop view if exists admin.duplicate_names;
+create view admin.duplicate_names as
+  select private.name_key(display_name) as name_key, array_agg(display_name || ' <' || email || '>' order by created_at) as players
+  from public.players group by 1 having count(*) > 1;
+
+-- live check for the sign-up form: { ok, message }
+create or replace function public.check_display_name(p_name text)
+returns json language plpgsql stable security definer set search_path = pg_catalog, public, private as $$
+declare v_prob text;
+begin
+  if length(coalesce(p_name, '')) > 100 then return json_build_object('ok', false, 'message', 'Display name must be 3–24 characters.'); end if;
+  v_prob := private.name_problem(p_name);
+  if v_prob is not null then return json_build_object('ok', false, 'message', v_prob); end if;
+  if private.name_taken(btrim(regexp_replace(p_name, '\s+', ' ', 'g')), null) then
+    return json_build_object('ok', false, 'taken', true, 'message', 'That display name is already taken. If it''s yours, sign in with the same email.');
+  end if;
+  return json_build_object('ok', true, 'message', null);
+end $$;
+
+-- a player whose saved name breaks the rules (e.g. 2 characters, saved before they existed) picks a new one in-game;
+-- names that are already fine can't be changed this way
+create or replace function public.fix_display_name(p_player_key uuid, p_name text)
+returns json language plpgsql security definer set search_path = pg_catalog, public, private as $$
+declare v_p public.players; v_prob text; v_name text := btrim(regexp_replace(coalesce(p_name, ''), '\s+', ' ', 'g'));
+begin
+  select * into v_p from public.players where player_key = p_player_key for update;
+  if not found then raise exception 'Unknown player. Please register again.'; end if;
+  if v_p.is_blocked then raise exception 'This account is not eligible.'; end if;
+  if private.name_problem(v_p.display_name) is null then raise exception 'Your display name already meets the rules.'; end if;
+  v_prob := private.name_problem(v_name);
+  if v_prob is not null then raise exception '%', v_prob; end if;
+  if private.name_taken(v_name, v_p.id) then raise exception 'That display name is already taken. Please choose another.'; end if;
+  update public.players set display_name = v_name where id = v_p.id returning * into v_p;
+  return json_build_object('display_name', v_p.display_name);
+end $$;
+
+-- --------------------------------------------------------------- Drip Run worlds (one per inCon-trol project)
+-- The run loops endlessly through the worlds that are live, in sort order. A world is live when its status is 'live',
+-- or 'scheduled' and its release_at has passed: a monthly release needs no deploy, only a row here.
+--   live       playable now
+--   scheduled  playable from release_at (shown as "coming" until then)
+--   locked     temporarily out of the rotation (hidden)
+--   retired    gone for good (hidden; kept for the record)
+-- A brand-new world also needs its scenery in site/js/run-game.js (LOOK, LAYOUTS, ATMOS, decor) and its project
+-- in site/js/run-projects.js; the game ignores ids it has no scenery for.
+create table if not exists private.worlds (
+  id          text primary key check (id ~ '^[a-z0-9-]{2,30}$'),
+  name        text not null check (char_length(name) between 2 and 60),
+  sort        int  not null,
+  status      text not null default 'scheduled' check (status in ('live', 'scheduled', 'locked', 'retired')),
+  release_at  timestamptz,
+  note        text,
+  updated_at  timestamptz not null default now(),
+  check (status <> 'scheduled' or release_at is not null)
+);
+-- Launch: 4 worlds live, then one more on the 1st of each month (midnight Central). Re-running this file never
+-- overwrites changes made with the admin functions below.
+insert into private.worlds (id, name, sort, status, release_at, note) values
+  ('melissa',   'Melissa Lake Park',            1, 'live',      null, 'launch world'),
+  ('epic',      'The Epic East',                2, 'live',      null, 'launch world'),
+  ('mckinney',  'McKinney City Hall',           3, 'live',      null, 'launch world'),
+  ('olympus',   '3300 Olympus Drive',           4, 'live',      null, 'launch world'),
+  ('aggie',     'Aggie Park',                   5, 'scheduled', '2026-12-01 00:00 America/Chicago', 'December release'),
+  ('arboretum', 'Dallas Arboretum',             6, 'scheduled', '2027-01-01 00:00 America/Chicago', 'January release'),
+  ('chase',     'Chase Tower',                  7, 'scheduled', '2027-02-01 00:00 America/Chicago', 'February release'),
+  ('agora',     'Commons at Agora',             8, 'scheduled', '2027-03-01 00:00 America/Chicago', 'March release')
+on conflict (id) do nothing;
+
+create or replace function private.world_state(w private.worlds) returns text
+language sql stable as $$
+  select case
+    when w.status = 'live' or (w.status = 'scheduled' and w.release_at <= now()) then 'live'
+    when w.status = 'scheduled' then 'coming'
+    else w.status end
+$$;
+
+-- what the game shows: live worlds (played in this order) and upcoming ones (as "coming <date>")
+create or replace function public.get_worlds()
+returns json language sql stable security definer set search_path = pg_catalog, public, private as $$
+  select coalesce(json_agg(json_build_object('id', w.id, 'name', w.name, 'sort', w.sort, 'state', private.world_state(w),
+           'release_at', case when private.world_state(w) = 'coming' then w.release_at end) order by w.sort), '[]')
+  from private.worlds w where private.world_state(w) in ('live', 'coming')
+$$;
+
+-- admin: schedule, lock, rotate, retire or add worlds (SQL editor only)
+create or replace function admin.set_world(p_id text, p_status text, p_release_at timestamptz default null, p_note text default null)
+returns text language plpgsql security definer set search_path = pg_catalog, public, private as $$
+declare w private.worlds;
+begin
+  select * into w from private.worlds where id = p_id for update;
+  if not found then raise exception 'No world %', p_id; end if;
+  if p_status not in ('live', 'scheduled', 'locked', 'retired') then raise exception 'Status must be live, scheduled, locked or retired.'; end if;
+  if p_status = 'scheduled' and p_release_at is null then raise exception 'A scheduled world needs a release time.'; end if;
+  update private.worlds set status = p_status, release_at = case when p_status = 'scheduled' then p_release_at else release_at end,
+    note = coalesce(p_note, note), updated_at = now() where id = p_id;
+  if not exists (select 1 from private.worlds x where private.world_state(x) = 'live') then
+    raise exception 'At least one world must stay live.';
+  end if;
+  return p_id || ' is now ' || p_status;
+end $$;
+
+create or replace function admin.add_world(p_id text, p_name text, p_sort int, p_status text default 'scheduled', p_release_at timestamptz default null)
+returns text language plpgsql security definer set search_path = pg_catalog, public, private as $$
+begin
+  insert into private.worlds (id, name, sort, status, release_at, note) values (p_id, p_name, p_sort, p_status, p_release_at, 'added');
+  return p_id || ' added (' || p_status || ')';
+end $$;
+
+-- admin: fix a display name (same rules as sign-up)
+create or replace function admin.rename_player(p_email text, p_name text)
+returns text language plpgsql security definer set search_path = pg_catalog, public, private as $$
+declare v_id uuid; v_prob text := private.name_problem(p_name);
+begin
+  select id into v_id from public.players where email_norm = lower(btrim(p_email));
+  if v_id is null then raise exception 'No player with that email.'; end if;
+  if v_prob is not null then raise exception '%', v_prob; end if;
+  if private.name_taken(p_name, v_id) then raise exception 'That display name is already taken.'; end if;
+  update public.players set display_name = btrim(regexp_replace(p_name, '\s+', ' ', 'g')) where id = v_id;
+  return 'renamed';
+end $$;
+
+drop view if exists admin.worlds;
+create view admin.worlds as
+  select w.sort, w.id, w.name, w.status, private.world_state(w) as state_now, w.release_at at time zone 'America/Chicago' as release_central, w.note, w.updated_at
+  from private.worlds w order by w.sort;
+
+-- players whose names were saved before the current rules (shown on boards until they sign in again or are renamed)
+drop view if exists admin.names_to_fix;
+create view admin.names_to_fix as
+  select email, display_name, private.name_problem(display_name) as problem,
+         format('select admin.rename_player(%L, %L);', email, 'NEW NAME') as rename_sql
+  from public.players where private.name_problem(display_name) is not null;
+
 -- --------------------------------------------------------------- register_player
 drop function if exists public.register_player(text, text, text, boolean, boolean, text, text);
 create or replace function public.register_player(
@@ -562,11 +767,11 @@ declare
   v_cid   uuid;
   v_p     public.players;
   v_back  boolean := false;   -- a returning player (this email already has a record)
+  v_prob  text;
 begin
   if coalesce(p_hp, '') <> '' then raise exception 'Registration failed.'; end if;
   if not coalesce(p_consent, false) then raise exception 'Please accept the contest rules.'; end if;
   if v_email !~ '^[^@\s]+@[^@\s]+\.[a-z]{2,}$' or length(v_email) > 120 then raise exception 'Please enter a valid email address.'; end if;
-  if char_length(v_name) not between 2 and 24 then raise exception 'Display name must be 2–24 characters.'; end if;
   if char_length(v_co) > 60 or (v_co <> '' and char_length(v_co) < 2) then raise exception 'Company must be 2–60 characters.'; end if;
   if v_name ~ '[<>]' or v_co ~ '[<>]' then raise exception 'Please remove < and > characters.'; end if;
   v_dom := private.email_domain(v_email);
@@ -578,6 +783,13 @@ begin
     v_back := true;
     -- returning player: keep their record (personal addresses registered before this rule keep working)
     if v_p.is_blocked then raise exception 'This account is not eligible.'; end if;
+    -- a name saved before the current rules (e.g. 2 characters) is replaced by the name typed now, if that one is valid
+    if private.name_problem(v_p.display_name) is not null then
+      v_prob := private.name_problem(v_name);
+      if v_prob is not null then raise exception 'Please choose a new display name. %', v_prob; end if;
+      if private.name_taken(v_name, v_p.id) then raise exception 'That display name is already taken. Please choose another.'; end if;
+      update public.players set display_name = v_name where id = v_p.id;
+    end if;
     if v_p.company_id is null then
       v_cid := private.assign_company(v_p.company, case when private.is_personal_domain(v_dom) then null else v_dom end, null, false, 'signup');
     end if;
@@ -585,6 +797,9 @@ begin
       company_id = coalesce(company_id, v_cid), email_domain = coalesce(email_domain, v_dom)
     where id = v_p.id returning * into v_p;
   else
+    v_prob := private.name_problem(v_name);
+    if v_prob is not null then raise exception '%', v_prob; end if;
+    if private.name_taken(v_name, null) then raise exception 'That display name is already taken. Please choose another.'; end if;
     if v_biz is null and not coalesce((select value = 'true' from private.settings where key = 'allow_personal_email'), false) then
       raise exception 'Please use your business email address. Personal addresses (like %) can''t join the leaderboard.', v_dom;
     end if;
@@ -596,9 +811,14 @@ begin
     end if;
     v_cid := private.assign_company(v_co, v_biz, p_company_id, p_new_company, 'signup');
     if v_co = '' then v_co := (select name from public.companies where id = v_cid); end if;
-    insert into public.players (email, display_name, company, marketing_opt_in, source, ip_hash, last_seen_at, company_id, email_domain)
-    values (v_email, v_name, v_co, coalesce(p_opt_in, false), left(p_source, 80), v_ip, now(), v_cid, v_dom)
-    returning * into v_p;
+    begin
+      insert into public.players (email, display_name, company, marketing_opt_in, source, ip_hash, last_seen_at, company_id, email_domain)
+      values (v_email, v_name, v_co, coalesce(p_opt_in, false), left(p_source, 80), v_ip, now(), v_cid, v_dom)
+      returning * into v_p;
+    exception when unique_violation then   -- two sign-ups at the same moment: the unique indexes decide
+      if sqlerrm ~ 'name_key' then raise exception 'That display name is already taken. Please choose another.'; end if;
+      raise exception 'This email was just registered. Please try again.';
+    end;
   end if;
   return json_build_object('player_key', v_p.player_key, 'display_name', v_p.display_name,
     'company', coalesce((select name from public.companies where id = private.active_company(v_p.company_id)), v_p.company),
@@ -608,12 +828,12 @@ end $$;
 
 -- --------------------------------------------------------------- start_run (one-time ticket per level attempt)
 drop function if exists public.start_run(uuid);
-create or replace function public.start_run(p_player_key uuid default null, p_level text default 'RUN')
+create or replace function public.start_run(p_player_key uuid default null, p_level text default 'WRUN')
 returns json
 language plpgsql security definer set search_path = public, private as $$
 declare v_pid uuid; v_ip text := private.client_ip_hash(); v_id uuid;
 begin
-  if not exists (select 1 from private.levels where id = p_level and active) then raise exception 'Unknown level.'; end if;
+  if not exists (select 1 from private.levels where id = p_level and active) then raise exception 'Only Drip Run is available.'; end if;
   if p_player_key is not null then
     select id into v_pid from public.players where player_key = p_player_key and not is_blocked;
   end if;
@@ -629,11 +849,12 @@ end $$;
 
 -- --------------------------------------------------------------- player summary (per game)
 drop function if exists public.get_player_summary(uuid);
-create or replace function public.get_player_summary(p_player_key uuid, p_game text default 'dash')
+create or replace function public.get_player_summary(p_player_key uuid, p_game text default 'wrun')
 returns json
 language plpgsql stable security definer set search_path = public, private as $$
 declare v_p public.players; v_m text := private.current_month(); v_ms bigint; v_as bigint; v_rank bigint; v_n bigint;
 begin
+  perform private.checked_game(p_game);
   select * into v_p from public.players where player_key = p_player_key;
   if not found then return null; end if;
   select score into v_ms from private.standings(p_game, v_m) where player_id = v_p.id;
@@ -646,123 +867,14 @@ begin
     'month_rank', case when v_ms is null then null else v_rank end, 'month_players', v_n);
 end $$;
 
--- --------------------------------------------------------------- submit_run — Drip Dash runner (plausibility checks)
--- Game facts used for bounds: top speed ≈ 900 px/s = 90 m/s; drops are worth at most
--- 10 × 5 (combo) × 2 (Flow Meter) = 100; golden valves at most 300; shield bonus 50 each.
+-- --------------------------------------------------------------- retired games
+-- Drip Run is the site's only game. The score functions of Drip Dash (runner), Bring Back the Flow and Splash Escape
+-- are removed, so nothing can submit to them over the API; their past runs stay in public.runs for the record.
 drop function if exists public.submit_run(uuid, uuid, int, int, int, int, int);
-create or replace function public.submit_run(
-  p_run_id uuid, p_player_key uuid, p_score int, p_duration_ms int,
-  p_distance int, p_drops int, p_valves int
-) returns json
-language plpgsql security definer set search_path = public, private as $$
-declare v_run public.runs; v_pid uuid; v_blocked boolean; v_elapsed_ms numeric; v_reason text := null; v_secs numeric;
-begin
-  select id, is_blocked into v_pid, v_blocked from public.players where player_key = p_player_key;
-  if v_pid is null then raise exception 'Unknown player. Please register again.'; end if;
-  if v_blocked then raise exception 'This account is not eligible.'; end if;
+drop function if exists public.submit_level(uuid, uuid, text, int, int, int);
+drop function if exists public.submit_splash(uuid, uuid, int, int, int, int);
 
-  select * into v_run from public.runs where id = p_run_id for update;
-  if not found then raise exception 'Unknown game ticket.'; end if;
-  if v_run.status <> 'started' then raise exception 'This game was already submitted.'; end if;
-  if v_run.player_id is not null and v_run.player_id <> v_pid then raise exception 'Ticket belongs to another player.'; end if;
-
-  v_elapsed_ms := extract(epoch from (now() - v_run.started_at)) * 1000;
-  v_secs := greatest(p_duration_ms, 0) / 1000.0;
-  if v_run.level is distinct from 'RUN' then v_reason := 'ticket is not for Drip Dash';
-  elsif v_elapsed_ms > 3 * 3600 * 1000 then v_reason := 'ticket expired';
-  elsif p_score is null or p_score < 0 or p_score > 1000000 then v_reason := 'invalid score';
-  elsif p_duration_ms < 1000 then v_reason := 'run too short';
-  elsif p_duration_ms > v_elapsed_ms + 3000 then v_reason := 'run longer than server clock';
-  elsif p_distance < 0 or p_distance > v_secs * 92 + 30 then v_reason := 'distance not possible in that time';
-  elsif p_drops < 0 or p_drops > v_secs * 20 + 10 then v_reason := 'too many drops for run time';
-  elsif p_valves < 0 or p_valves > v_secs / 2 + 3 then v_reason := 'too many valves for run time';
-  elsif p_score < p_distance then v_reason := 'score lower than distance';
-  elsif p_score > p_distance + p_drops * 100 + p_valves * 300 + (v_secs / 13 + 2) * 50 then v_reason := 'score exceeds possible bonus';
-  end if;
-
-  update public.runs set player_id = v_pid, submitted_at = now(), score = p_score, duration_ms = p_duration_ms,
-    distance = p_distance, drops = p_drops, valves = p_valves, month = private.current_month(),
-    status = case when v_reason is null then 'accepted' else 'rejected' end, reject_reason = v_reason
-  where id = p_run_id;
-  update public.players set last_seen_at = now() where id = v_pid;
-  return (jsonb_build_object('accepted', v_reason is null, 'reason', v_reason) || public.get_player_summary(p_player_key, 'dash')::jsonb)::json;
-end $$;
-
--- --------------------------------------------------------------- submit_level — Bring Back the Flow (per-level limits)
-create or replace function public.submit_level(
-  p_run_id uuid, p_player_key uuid, p_level text, p_score int, p_duration_ms int, p_stars int
-) returns json
-language plpgsql security definer set search_path = public, private as $$
-declare v_run public.runs; v_pid uuid; v_blocked boolean; v_lv private.levels; v_elapsed numeric; v_reason text := null;
-begin
-  select id, is_blocked into v_pid, v_blocked from public.players where player_key = p_player_key;
-  if v_pid is null then raise exception 'Unknown player. Please register again.'; end if;
-  if v_blocked then raise exception 'This account is not eligible.'; end if;
-
-  select * into v_run from public.runs where id = p_run_id for update;
-  if not found then raise exception 'Unknown game ticket.'; end if;
-  if v_run.status <> 'started' then raise exception 'This game was already submitted.'; end if;
-  if v_run.player_id is not null and v_run.player_id <> v_pid then raise exception 'Ticket belongs to another player.'; end if;
-  select * into v_lv from private.levels where id = v_run.level;
-
-  v_elapsed := extract(epoch from (now() - v_run.started_at)) * 1000;
-  if v_run.level is distinct from p_level or p_level in ('RUN', 'SPLASH', 'WRUN') then v_reason := 'ticket is for a different level';
-  elsif v_elapsed > 3 * 3600 * 1000 then v_reason := 'ticket expired';
-  elsif p_score is null or p_score < 0 or p_score > v_lv.max_score then v_reason := 'score above level maximum';
-  elsif p_stars is null or p_stars not between 1 and 3 then v_reason := 'invalid stars';
-  elsif p_duration_ms < v_lv.min_ms then v_reason := 'level finished impossibly fast';
-  elsif p_duration_ms > v_elapsed + 3000 then v_reason := 'run longer than server clock';
-  end if;
-
-  update public.runs set player_id = v_pid, submitted_at = now(), score = p_score, stars = p_stars,
-    duration_ms = p_duration_ms, month = private.current_month(),
-    status = case when v_reason is null then 'accepted' else 'rejected' end, reject_reason = v_reason
-  where id = p_run_id;
-  update public.players set last_seen_at = now() where id = v_pid;
-
-  return (jsonb_build_object('accepted', v_reason is null, 'reason', v_reason) || public.get_player_summary(p_player_key, 'flow')::jsonb)::json;
-end $$;
-
--- --------------------------------------------------------------- submit_splash — Splash Escape (plausibility checks)
--- Game facts used for bounds (keep in sync with site/js/splash-game.js):
---   survival = 10 points per second; a golden drop is worth at most 25 x 5 (combo) = 125;
---   a power-up pickup is worth 50; golden drops spawn at most ~0.8/s, power-ups every >= 9 s.
-create or replace function public.submit_splash(
-  p_run_id uuid, p_player_key uuid, p_score int, p_duration_ms int, p_drops int, p_powerups int
-) returns json
-language plpgsql security definer set search_path = public, private as $$
-declare v_run public.runs; v_pid uuid; v_blocked boolean; v_elapsed_ms numeric; v_reason text := null; v_secs numeric;
-begin
-  select id, is_blocked into v_pid, v_blocked from public.players where player_key = p_player_key;
-  if v_pid is null then raise exception 'Unknown player. Please register again.'; end if;
-  if v_blocked then raise exception 'This account is not eligible.'; end if;
-
-  select * into v_run from public.runs where id = p_run_id for update;
-  if not found then raise exception 'Unknown game ticket.'; end if;
-  if v_run.status <> 'started' then raise exception 'This game was already submitted.'; end if;
-  if v_run.player_id is not null and v_run.player_id <> v_pid then raise exception 'Ticket belongs to another player.'; end if;
-
-  v_elapsed_ms := extract(epoch from (now() - v_run.started_at)) * 1000;
-  v_secs := greatest(coalesce(p_duration_ms, 0), 0) / 1000.0;
-  if v_run.level is distinct from 'SPLASH' then v_reason := 'ticket is not for Splash Escape';
-  elsif v_elapsed_ms > 3 * 3600 * 1000 then v_reason := 'ticket expired';
-  elsif p_score is null or p_score < 0 or p_score > 1000000 then v_reason := 'invalid score';
-  elsif p_duration_ms is null or p_duration_ms < 3000 then v_reason := 'run too short';
-  elsif p_duration_ms > v_elapsed_ms + 3000 then v_reason := 'run longer than server clock';
-  elsif p_drops is null or p_drops < 0 or p_drops > v_secs * 1.0 + 6 then v_reason := 'too many golden drops for run time';
-  elsif p_powerups is null or p_powerups < 0 or p_powerups > v_secs / 6 + 2 then v_reason := 'too many power-ups for run time';
-  elsif p_score > floor(v_secs * 10) + p_drops * 125 + p_powerups * 50 + 20 then v_reason := 'score exceeds possible bonus';
-  end if;
-
-  update public.runs set player_id = v_pid, submitted_at = now(), score = p_score, duration_ms = p_duration_ms,
-    drops = p_drops, valves = p_powerups, month = private.current_month(),
-    status = case when v_reason is null then 'accepted' else 'rejected' end, reject_reason = v_reason
-  where id = p_run_id;
-  update public.players set last_seen_at = now() where id = v_pid;
-  return (jsonb_build_object('accepted', v_reason is null, 'reason', v_reason) || public.get_player_summary(p_player_key, 'splash')::jsonb)::json;
-end $$;
-
--- --------------------------------------------------------------- submit_water_run — Drip Dash: Water Run (plausibility checks)
+-- --------------------------------------------------------------- submit_water_run — Drip Run (plausibility checks; endless runs)
 -- Game facts used for bounds (keep in sync with RULES in site/js/run-game.js):
 --   top speed 30 m/s, x1.5 during Jet Boost = 45 m/s; a drop is worth at most 10 x 2 (Flow Meter) = 20;
 --   a golden valve at most 100 x 2 = 200; a power-up pickup 25. Drops: at most 5 per obstacle row,
@@ -788,7 +900,7 @@ begin
 
   v_elapsed_ms := extract(epoch from (now() - v_run.started_at)) * 1000;
   v_secs := greatest(coalesce(p_duration_ms, 0), 0) / 1000.0;
-  if v_run.level is distinct from 'WRUN' then v_reason := 'ticket is not for Water Run';
+  if v_run.level is distinct from 'WRUN' then v_reason := 'ticket is not for Drip Run';
   elsif v_elapsed_ms > 3 * 3600 * 1000 then v_reason := 'ticket expired';
   elsif p_score is null or p_score < 0 or p_score > 1000000 then v_reason := 'invalid score';
   elsif p_duration_ms is null or p_duration_ms < 1000 then v_reason := 'run too short';
@@ -811,10 +923,10 @@ begin
   return (jsonb_build_object('accepted', v_reason is null, 'reason', v_reason) || public.get_player_summary(p_player_key, 'wrun')::jsonb)::json;
 end $$;
 
--- --------------------------------------------------------------- leaderboards (p_game: 'dash' runner | 'flow' Valley Score | 'splash' Splash Escape)
+-- --------------------------------------------------------------- leaderboards (Drip Run only: p_game must be 'wrun')
 drop function if exists public.get_leaderboard(text, text, int);
 drop function if exists public.get_leaderboard(text, text, int, text);
-create or replace function public.get_leaderboard(p_period text default 'month', p_month text default null, p_limit int default 50, p_game text default 'dash')
+create or replace function public.get_leaderboard(p_period text default 'month', p_month text default null, p_limit int default 50, p_game text default 'wrun')
 returns table (rank bigint, display_name text, company text, score bigint, levels bigint, achieved_at timestamptz)
 language sql stable security definer set search_path = public, private as $$
   select row_number() over (order by v.score desc, v.last_at asc), p.display_name, coalesce(c.name, p.company), v.score, v.levels, v.last_at
@@ -827,7 +939,7 @@ $$;
 
 drop function if exists public.get_company_board(text, int);
 drop function if exists public.get_company_board(text, int, text);
-create or replace function public.get_company_board(p_period text default 'month', p_limit int default 25, p_game text default 'dash')
+create or replace function public.get_company_board(p_period text default 'month', p_limit int default 25, p_game text default 'wrun')
 returns table (rank bigint, company text, total bigint, players bigint)
 language sql stable security definer set search_path = public, private as $$
   with ranked as (
@@ -845,7 +957,7 @@ $$;
 
 drop function if exists public.get_monthly_winners(int);
 drop function if exists public.get_monthly_winners(int, text);
-create or replace function public.get_monthly_winners(p_months int default 12, p_game text default 'dash')
+create or replace function public.get_monthly_winners(p_months int default 12, p_game text default 'wrun')
 returns table (month text, rank bigint, display_name text, company text, score bigint)
 language sql stable security definer set search_path = public, private as $$
   with months as (
@@ -869,10 +981,10 @@ grant execute on function
   public.register_player(text, text, text, boolean, boolean, text, text, uuid, boolean),
   public.lookup_company(text, text),
   public.start_run(uuid, text),
-  public.submit_run(uuid, uuid, int, int, int, int, int),
-  public.submit_level(uuid, uuid, text, int, int, int),
-  public.submit_splash(uuid, uuid, int, int, int, int),
   public.submit_water_run(uuid, uuid, int, int, int, int, int, int, int, int),
+  public.get_worlds(),
+  public.check_display_name(text),
+  public.fix_display_name(uuid, text),
   public.get_player_summary(uuid, text),
   public.get_leaderboard(text, text, int, text),
   public.get_company_board(text, int, text),

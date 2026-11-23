@@ -1,8 +1,10 @@
-# Drip Dash: Drip Run
+# Drip Run
 
-**Play:** https://drip-dash-nine.vercel.app/run/ · **Leaderboard:** https://drip-dash-nine.vercel.app/leaderboard.html?game=wrun
+**Play:** https://drip-dash-nine.vercel.app/ · **Leaderboard:** https://drip-dash-nine.vercel.app/leaderboard.html
 
-Drip Run is a 3D, three-lane runner in the Drip Dash portal. Players run Drip along **the Water Trail**: eight real projects from the [inCon-trol gallery](https://incontrolwatersystems.com/gallery), in a row, from sunrise to evening.
+Drip Run is the site's only game: an endless 3D, three-lane runner along **the Water Trail**. Each **world** is a real project from the [inCon-trol gallery](https://incontrolwatersystems.com/gallery). The run loops through the worlds that are live this month (4 at launch, one more on the 1st of each month, set in the database: see section 2a of the admin guide) for as long as Drip survives. There is no finish line; the HUD shows the lap and "World n of N".
+
+> **Note (endless worlds update):** the sections below describe the original 8-stop journey to Commons at Agora. Since this update the same scenery is used per world, the stop gateways read "WORLD n OF N", and reaching the last live world starts the next lap instead of "arriving".
 
 ## Story
 > The fountains on the Water Trail are running dry. Drip, the last drop out of Melissa Lake Park's tipping bucket, has until nightfall to reach **Commons at Agora** and switch on the evening show, waking every water feature on the way.
@@ -215,12 +217,12 @@ Every simulated run passed the server checks in `submit_water_run` (see above). 
 - **Merging:** each 30 m section's static, opaque scenery (including seated people) is merged into one mesh per material. Because every stop and section is identical on each lap, the merge happens once and is cached. After that, updating the world takes about 1 ms per frame.
 - **Distance:** moving details (jets, walking people) are drawn only in the nearer sections. Far sections are fogged anyway.
 - **Draw calls:** desktop with shadows uses about 380–720 per frame; phones, with no real-time shadows, about 325. Phones also show fewer people and particles, and pixel ratio is capped at 1.5.
-- **Caching:** Drip Run's scripts and CSS load with a `?v=` tag (in `site/run/index.html` and the imports in `run-main.js` / `run-game.js`). That stops a browser mixing old and new files for up to 10 minutes after a deploy. **Bump the tag on every change.**
+- **Caching:** Drip Run's scripts and CSS load with a `?v=` tag (in `site/index.html` and the imports in `run-main.js` / `run-game.js`). That stops a browser mixing old and new files for up to 10 minutes after a deploy. **Bump the tag on every change.**
 
 ## Files
 | File | What it holds |
 |---|---|
-| `site/run/index.html` | Screens, HUD, journey bar, project chip, project panel, Trail list |
+| `site/index.html` | Screens, HUD, journey bar, project chip, project panel, Trail list |
 | `site/js/run-game.js` | Engine, the eight stops, billboards, water, people, Drip in 3D, story events |
 | `site/js/run-main.js` | Controls (keys, swipe, click), sign picking, panels, journey HUD, scores |
 | `site/js/run-projects.js` | The verified project list and photo sources |

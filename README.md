@@ -1,79 +1,51 @@
-# Drip Dash: inCon-trol Water Systems newsletter games
+# Drip Run: the inCon-trol Water Systems newsletter game
 
-Four browser games share one site (the Drip Dash portal), one sign-up and one backend:
+**Drip Run** is the site's one and only game: an endless 3D three-lane runner (Three.js) along the Water Trail. Each **world** is a real inCon-trol gallery project; the run loops through the worlds that are live this month for as long as Drip survives. A new world opens on the 1st of each month (see *Worlds* in [docs/ADMIN_GUIDE.md](docs/ADMIN_GUIDE.md)). Details: [docs/WATER_RUN.md](docs/WATER_RUN.md).
 
-| Game | Where | What it is | Leaderboard |
-|---|---|---|---|
-| **Drip Dash** (main game) | `/` | One-tap endless runner: Drip races through turf fields, a pump station and a fountain plaza, dodging sprinklers, valve boxes, standpipes, low main lines and geysers | Best single run per player |
-| **Drip Run** (3D) | `/run/` | Three-lane 3D runner (Three.js) along the Water Trail: Drip races from Melissa Lake Park to Commons at Agora through eight real inCon-trol gallery projects, waking the fountains, with branded billboards and clickable project signs | Best single run per player |
-| **Bring Back the Flow** | `/flow/` | 7-level story adventure: restore Wellbrook's water systems by operating valves, pumps, VFDs, zones, a rain diverter, a water tower and a fountain show | Valley Score (best score on each level, added up) |
-| **Splash Escape** | `/splash/` | 30–90 s arcade survival on a circular splash pad: Spritz dodges falling drops, geysers, the rotating Big Fountain, jets, drains, fountain carts, sprinklers and splash waves | Best single run per player |
-
-Players switch games from the menus: the Drip Dash title screen has cards for the other games (Drip Run is highlighted) and its game-over screen links to them; every other game links back to Drip Dash. The leaderboard page has a tab for each game. Details: [docs/WATER_RUN.md](docs/WATER_RUN.md), [docs/SPLASH_ESCAPE.md](docs/SPLASH_ESCAPE.md).
-
-**Character customization (Drip Dash):** *Customize Drip* on the title screen (or *Change outfit* after a run) opens the outfit picker:
-- Classic Drip and Hard Hat are available from the start.
-- Hi-Vis Vest, 25th Anniversary Aqua and Golden Drip unlock at best runs of 1,000, 2,500 and 5,000.
-
-The chosen outfit is worn in the game and shown on the title screen. Bring Back the Flow keeps its own star-based outfits in its Album.
+The earlier games (Drip Dash runner, Bring Back the Flow, Splash Escape) are retired: their pages and code are removed from the site, their old addresses redirect to Drip Run, and the database refuses to start, score or rank them. Their past runs stay in the database for the record. They can be recovered from git history (before commit "Drip Run only").
 
 | | URL |
 |---|---|
-| **Game link (share this one)** | **https://drip-dash-nine.vercel.app/** (Drip Dash) |
-| Drip Run (3D) | https://drip-dash-nine.vercel.app/run/ |
-| Bring Back the Flow | https://drip-dash-nine.vercel.app/flow/ |
-| Splash Escape | https://drip-dash-nine.vercel.app/splash/ |
-| Leaderboards | https://drip-dash-nine.vercel.app/leaderboard.html (add `?game=wrun`, `?game=flow` or `?game=splash`) |
+| **Game link (share this one)** | **https://drip-dash-nine.vercel.app/** |
+| Leaderboard | https://drip-dash-nine.vercel.app/leaderboard.html |
 | Rules & privacy | https://drip-dash-nine.vercel.app/rules.html |
-| Flow design document | [docs/GAME_DESIGN.md](docs/GAME_DESIGN.md) |
 
-> **Status: LIVE** with the shared Supabase leaderboard (connected 2026-11-17).
-> - Main site (Vercel): https://drip-dash-nine.vercel.app
-> - Old address https://dev-naga.github.io/drip-dash/ now only redirects here (home page → Drip Dash at `/`, other pages → the same page on Vercel, `?query` and `#hash` kept). Its files are in `redirect/`.
+> **Status: LIVE** with the shared Supabase leaderboard.
+> - Site (Vercel): https://drip-dash-nine.vercel.app. Old addresses `/run/`, `/flow/` and `/splash/` redirect to `/` (permanent redirects in `vercel.json`).
+> - Old address https://dev-naga.github.io/drip-dash/ only redirects here (`?query` and `#hash` kept). Its files are in `redirect/`.
 > - Database: Supabase project "Games" (`kkhjnjwmhpzxnqjtprzw`). Admin views (`admin.*`) are in the Supabase SQL editor; see [docs/ADMIN_GUIDE.md](docs/ADMIN_GUIDE.md).
 
 ## Stack
-- **Game:** plain HTML5 Canvas and JavaScript modules on a fixed 960×540 stage that scales to any screen. No framework, no build step, and all art is drawn in code. Portrait phones get a "rotate" prompt with a "play anyway" option.
-- **Hosting:** Vercel (project `drip-dash`, connected to this repo, redeploys on every push to `main`; config and security headers in `vercel.json`, which publishes the `site/` folder as-is with no build step). GitHub Pages no longer serves the game: `.github/workflows/deploy-pages.yml` publishes only the redirect pages in `redirect/`.
-- **Backend:** Supabase. `site/js/config.js` holds the project URL and the *publishable* key, which is meant to be public: the tables have RLS on with no policies, so the key can only call the game functions in `supabase/schema.sql`. Never put the `service_role` / secret key in the site.
-- **Backend:** Supabase Postgres (free tier). The browser calls 10 locked-down SQL functions. Drip Run loads Three.js 0.160 from the jsDelivr CDN (pinned version). Per-level score limits and minimum durations live in `private.levels`. Schema: [`supabase/schema.sql`](supabase/schema.sql).
+- **Game:** plain JavaScript modules, Three.js 0.160 from the jsDelivr CDN (pinned), no framework and no build step.
+- **Hosting:** Vercel (project `drip-dash`, connected to this repo, redeploys on every push to `main`; config, redirects and security headers in `vercel.json`, which publishes the `site/` folder as-is). GitHub Pages only publishes the redirect pages in `redirect/`.
+- **Backend:** Supabase Postgres (free tier). `site/js/config.js` holds the project URL and the *publishable* key, which is meant to be public: the tables have RLS on with no policies, so the key can only call these functions: `register_player`, `lookup_company`, `check_display_name`, `fix_display_name`, `get_worlds`, `start_run`, `submit_water_run`, `get_player_summary`, `get_leaderboard`, `get_company_board`, `get_monthly_winners`. Never put the `service_role` / secret key in the site. Schema: [`supabase/schema.sql`](supabase/schema.sql).
+- **Scores:** every run needs a one-time server ticket (`start_run`); `submit_water_run` checks the run against the server clock and the game's physics (distance, drops, valves, power-ups and water deliveries possible in that time), accepts each ticket once, and ties it to one player. The leaderboard is each player's best accepted run.
+- **Display names:** 3–24 characters, unique (ignoring case, accents, spaces and punctuation), letters/numbers/spaces and `. ' - _` only, with a blocklist for offensive or reserved words (`private.blocked_names`). Checked live on the form and enforced by the database (unique index).
 - **Keep-alive:** `.github/workflows/supabase-keepalive.yml` pings Supabase daily so the free project doesn't pause.
 
-## Folder map
+## Files
 ```
-site/
-  index.html            Drip Dash (runner): title, outfits, how-to, register, game over, leaderboard
-  js/game.js, main.js   runner engine (+ outfits) and runner screens
-  flow/index.html       Bring Back the Flow: title, story, register, briefing, results, album, leaderboard
-  js/flow-main.js       Flow screens
-  run/index.html        Drip Run (3D): title, how-to, register, game over, leaderboard
-  js/run-game.js        Drip Run engine: Three.js world, zones, obstacles, Drip in 3D
-  js/run-main.js        Drip Run screens, swipe/keyboard/click controls, project panels
-  js/run-projects.js    Water Trail project list (verified gallery info) and photo sources
-  splash/index.html     Splash Escape: title, how-to, achievements, register, game over, leaderboard
-  js/splash-game.js     Splash Escape engine, arena art and Spritz the mascot
-  js/splash-main.js     Splash Escape screens and controls
-  js/engine.js          stage scaling, input, loop, particles, Drip + Gauge characters, dialog
-  js/kit.js             living-blueprint parts: Pipe, Valve, Pump, Meter, Tank, Slider, Btn
-  js/levelbase.js       shared level framework (timer, golden drops, scoring, win/fail)
-  js/levels/*.js        one file per level  ← add new levels here (+ index.js)
-  js/map.js             Wellbrook Valley map
-  js/progress.js        local progress, achievements, outfits
-  js/main.js            app controller
-  js/api.js, board.js   Supabase calls, demo fallback, leaderboard tabs
-  js/config.js          ← Supabase URL + publishable key go here
-  assets/projects/      real project photos (resized from Egnyte marketing library)
-supabase/schema.sql     tables, level limits, anti-cheat, Valley Score leaderboards, admin views
-supabase/tests/         automated database tests (npm test): scoring/security + company matching
-docs/                   design doc, admin guide, newsletter snippet
-marketing/              newsletter hero images
+site/index.html         Drip Run: title, how-to, sign-up, new-name prompt, results, leaderboard, pause, worlds list
+site/leaderboard.html   full-page Drip Run leaderboard
+site/rules.html         contest rules and privacy notice
+site/js/run-game.js     game engine: Three.js world, worlds (setWorlds), endless laps, obstacles, Drip in 3D
+site/js/run-main.js     screens, controls, live worlds from get_worlds, run tickets and score saving
+site/js/run-projects.js the inCon-trol projects behind each world (verified gallery info) and photo sources
+site/js/names.js        display-name rules for instant feedback (mirrors private.name_problem)
+site/js/company.js      business email, company detection and confirmation on sign-up
+site/js/api.js, board.js  Supabase calls, demo fallback, leaderboard tabs and states
+site/js/config.js       Supabase URL + publishable key
+supabase/schema.sql     tables, worlds, name rules, anti-cheat, leaderboards, admin views
+supabase/tests/         automated database tests (npm test): Drip Run scoring, worlds, names, security, companies
+redirect/               the pages GitHub Pages serves (redirects to Vercel)
+docs/                   admin guide, Drip Run notes, newsletter snippet
 ```
 
 ## Run and test locally
 ```bash
 python -m http.server 5173 --directory site
 ```
-Then open http://localhost:5173 (runner) or http://localhost:5173/flow/ (add `?level=L4&dev` to jump to a Flow level).
+Then open http://localhost:5173 (add `?dev&d=600` to jump 600 m into a run for screenshots; never submitted).
 
 Database tests:
 ```bash
@@ -81,9 +53,9 @@ cd supabase/tests && npm install && npm test
 ```
 
 ## Anti-cheat summary
-- **Run tickets:** each level attempt gets a one-time ticket from the server, timed by the server's clock and bound to that level and player.
-- **Per-level limits:** each level has a maximum score and a minimum duration. Repeatable in-level bonuses are capped so honest players can't exceed the maximum.
-- **Rejections are kept:** runs that fail a check are stored for review, not silently dropped.
+- **Run tickets:** each run gets a one-time ticket from the server, timed by the server's clock and tied to Drip Run and the player. A ticket can be submitted once.
+- **Physics limits:** distance, drops, valves, power-ups and water deliveries must be possible in the run's time, the run can't be longer than the server clock says, and the score can't exceed what those pickups are worth.
+- **Rejections are kept:** runs that fail a check are stored for review (`admin.rejected_runs`), not silently dropped.
 - **Spam protection:** rate limits per player and per network, and a honeypot field on the sign-up form.
 - **Human review:** someone checks the top scores before winners are announced.
 

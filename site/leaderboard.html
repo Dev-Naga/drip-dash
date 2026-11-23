@@ -3,29 +3,23 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Drip Dash Leaderboard | inCon-trol Water Systems</title>
-  <meta name="description" content="Monthly and all-time Drip Dash leaderboard for inCon-trol Water Systems customers.">
+  <title>Drip Run Leaderboard | inCon-trol Water Systems</title>
+  <meta name="description" content="Monthly and all-time Drip Run leaderboard for inCon-trol Water Systems customers.">
   <meta name="theme-color" content="#005695">
   <link rel="icon" href="assets/drip-mascot.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Zilla+Slab:ital,wght@0,700;1,700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/style.css?v=wr25">
 </head>
 <body class="page">
   <div class="page-wrap">
     <header class="page-head">
       <a href="https://www.incontrolwatersystems.com" target="_blank" rel="noopener"><img src="assets/logo-incontrol.png" alt="inCon-trol Water Systems"></a>
-      <a class="btn primary" id="play-link" href="./">▶ Play</a>
+      <a class="btn primary" href="./">▶ Play Drip Run</a>
     </header>
     <div class="card board-card" style="max-height:none">
-      <h1>🏆 Leaderboard</h1>
-      <div class="tabs game-tabs" role="tablist" aria-label="Game">
-        <a role="tab" href="?game=dash" id="tab-dash">Drip Dash</a>
-        <a role="tab" href="?game=wrun" id="tab-wrun">Drip Run</a>
-        <a role="tab" href="?game=flow" id="tab-flow">Bring Back the Flow</a>
-        <a role="tab" href="?game=splash" id="tab-splash">Splash Escape</a>
-      </div>
+      <h1>🏆 Drip Run Leaderboard</h1>
       <p class="muted small" id="mode-note"></p>
       <div id="board"></div>
     </div>
@@ -34,19 +28,10 @@
     import { mountBoard } from './js/board.js';
     import { LIVE } from './js/config.js';
     import { store } from './js/api.js';
-    const GAMES = { dash: ['./', 'Drip Dash'], wrun: ['run/', 'Drip Run'], flow: ['flow/', 'Bring Back the Flow'], splash: ['splash/', 'Splash Escape'] };
-    const q = new URLSearchParams(location.search).get('game');
-    const game = GAMES[q] ? q : 'dash';
-    for (const g of Object.keys(GAMES)) document.getElementById(`tab-${g}`).setAttribute('aria-selected', String(g === game));
-    document.getElementById('play-link').href = GAMES[game][0];
-    document.getElementById('play-link').textContent = `▶ Play ${GAMES[game][1]}`;
     document.getElementById('mode-note').textContent = !LIVE
-      ? 'DEMO MODE: the shared leaderboard is not connected yet, so this page shows sample data and scores from this browser only.'
-      : game === 'flow' ? 'Valley Score = your best score on every level, added up. Monthly winners are confirmed by inCon-trol after the month closes.'
-      : game === 'wrun' ? 'Best single run per player (1 point per metre, plus drops, golden valves and power-ups). Monthly winners are confirmed by inCon-trol after the month closes.'
-      : game === 'splash' ? 'Best single run per player (10 points per second survived, plus golden drops and power-ups). Monthly winners are confirmed by inCon-trol after the month closes.'
-      : 'Best single run per player. Monthly winners are confirmed by inCon-trol after the month closes.';
-    const board = mountBoard(document.getElementById('board'), { me: store.get('dripdash.player'), game });
+      ? 'DEMO MODE: the shared leaderboard is not connected, so this page shows sample data and scores from this browser only.'
+      : 'Best single run per player (1 point per metre, plus drops, golden valves, power-ups and water deliveries). Monthly winners are confirmed by inCon-trol after the month closes.';
+    const board = mountBoard(document.getElementById('board'), { me: store.get('dripdash.player') });
     setInterval(() => document.visibilityState === 'visible' && board.refresh(), 60000);
   </script>
 </body>
