@@ -8,11 +8,14 @@
   "trailingSlash": true,
   "redirects": [
     { "source": "/run", "destination": "/", "permanent": true },
-    { "source": "/run/:path*", "destination": "/", "permanent": true },
+    { "source": "/run/", "destination": "/", "permanent": true },
+    { "source": "/run/(.*)", "destination": "/", "permanent": true },
     { "source": "/flow", "destination": "/", "permanent": true },
-    { "source": "/flow/:path*", "destination": "/", "permanent": true },
+    { "source": "/flow/", "destination": "/", "permanent": true },
+    { "source": "/flow/(.*)", "destination": "/", "permanent": true },
     { "source": "/splash", "destination": "/", "permanent": true },
-    { "source": "/splash/:path*", "destination": "/", "permanent": true }
+    { "source": "/splash/", "destination": "/", "permanent": true },
+    { "source": "/splash/(.*)", "destination": "/", "permanent": true }
   ],
   "headers": [
     {
